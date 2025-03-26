@@ -35,6 +35,7 @@ import { showConfirm, SimpleSelector } from "./ui-lib";
 import clsx from "clsx";
 import { isMcpEnabled, initializeMcpSystem } from "../mcp/actions";
 import { getClientConfig } from "../config/client";
+import { OnlineMembers } from "./online-members";
 
 const ChatList = dynamic(async () => (await import("./chat-list")).ChatList, {
   loading: () => null,
@@ -186,8 +187,10 @@ export function SideBarHeader(props: {
   logo?: React.ReactNode;
   children?: React.ReactNode;
   shouldNarrow?: boolean;
+  onSubTitleClick?: () => void;
 }) {
-  const { title, subTitle, logo, children, shouldNarrow } = props;
+  const { title, subTitle, logo, children, shouldNarrow, onSubTitleClick } =
+    props;
   return (
     <Fragment>
       <div
@@ -204,7 +207,22 @@ export function SideBarHeader(props: {
           >
             {title}
           </div>
-          <div className={styles["sidebar-sub-title"]}>{subTitle}</div>
+          <OnlineMembers />
+          <div
+            className={clsx(styles["sidebar-sub-title"], {
+              [styles["sidebar-sub-title-clickable"]]: !!onSubTitleClick,
+            })}
+            onClick={(e) => {
+              // 如果用户正在选择文本，不触发点击事件
+              if (window.getSelection()?.toString()) {
+                return;
+              }
+              onSubTitleClick?.();
+            }}
+            title={onSubTitleClick ? "点击刷新" : undefined}
+          >
+            {subTitle}
+          </div>
         </div>
         <div className={clsx(styles["sidebar-logo"], "no-dark")}>{logo}</div>
       </div>
@@ -247,14 +265,98 @@ export function SideBar(props: { className?: string }) {
   const config = useAppConfig();
   const chatStore = useChatStore();
   const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [sideBarTitle, setSideBarTitle] = useState("NeatChat");
+  const [sideBarSubTitle, setSideBarSubTitle] = useState(
+    "A Better AI assistant.",
+  );
+  const [hitokotoUrl, setHitokotoUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
 
+  // 自定义LOGO渲染组件
+  const renderLogo = () => {
+    if (logoUrl) {
+      return (
+        <img
+          src={logoUrl}
+          alt="Logo"
+          width={44}
+          height={44}
+          style={{ objectFit: "contain" }}
+        />
+      );
+    }
+    return <NeatIcon width={44} height={44} />;
+  };
+
+  // 获取一言的函数
+  const fetchHitokoto = (url: string) => {
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.hitokoto) {
+          // 构建包含来源和作者的副标题
+          let hitokotoText = data.hitokoto;
+          if (data.from) {
+            hitokotoText += ` —— ${data.from}`;
+            if (data.from_who) {
+              hitokotoText += `「${data.from_who}」`;
+            }
+          }
+          setSideBarSubTitle(hitokotoText);
+          console.log("[SideBar] Hitokoto:", hitokotoText);
+        }
+      })
+      .catch((err) => {
+        console.error("[SideBar] Failed to fetch hitokoto:", err);
+      });
+  };
+
+  // 刷新一言的函数
+  const refreshHitokoto = () => {
+    if (hitokotoUrl) {
+      console.log("[SideBar] Refreshing hitokoto from:", hitokotoUrl);
+      fetchHitokoto(hitokotoUrl);
+    }
+  };
+
+  // 初始化配置和MCP
   useEffect(() => {
     console.log("[Config] got config from build time", getClientConfig());
     useAccessStore.getState().fetch();
 
+    // 获取系统配置（只请求一次）
+    fetch("/api/config")
+      .then((res) => res.json())
+      .then((data) => {
+        // 设置侧边栏标题
+        if (data.sideBarTitle) {
+          setSideBarTitle(data.sideBarTitle);
+          console.log("[SideBar] Title:", data.sideBarTitle);
+        }
+
+        // 如果配置了一言API，则获取一言并保存URL
+        if (data.hitokotoUrl && data.hitokotoUrl.length > 0) {
+          setHitokotoUrl(data.hitokotoUrl);
+          fetchHitokoto(data.hitokotoUrl);
+        }
+
+        // 如果配置了LOGO URL，则保存
+        if (data.sideBarLogoUrl && data.sideBarLogoUrl.length > 0) {
+          setLogoUrl(data.sideBarLogoUrl);
+          console.log("[SideBar] Logo URL:", data.sideBarLogoUrl);
+        }
+      })
+      .catch((err) => {
+        console.error("[SideBar] Failed to fetch config:", err);
+      });
+
+    // 初始化MCP系统
     const initMcp = async () => {
       try {
         const enabled = await isMcpEnabled();
+        setMcpEnabled(enabled);
+        console.log("[SideBar] MCP enabled:", enabled);
+
         if (enabled) {
           console.log("[MCP] initializing...");
           await initializeMcpSystem();
@@ -267,16 +369,6 @@ export function SideBar(props: { className?: string }) {
     initMcp();
   }, []);
 
-  useEffect(() => {
-    // 检查 MCP 是否启用
-    const checkMcpStatus = async () => {
-      const enabled = await isMcpEnabled();
-      setMcpEnabled(enabled);
-      console.log("[SideBar] MCP enabled:", enabled);
-    };
-    checkMcpStatus();
-  }, []);
-
   return (
     <SideBarContainer
       onDragStart={onDragStart}
@@ -284,10 +376,11 @@ export function SideBar(props: { className?: string }) {
       {...props}
     >
       <SideBarHeader
-        title="NeatChat"
-        subTitle="A Better AI assistant."
-        logo={<NeatIcon width={44} height={44} />}
+        title={sideBarTitle}
+        subTitle={sideBarSubTitle}
+        logo={renderLogo()}
         shouldNarrow={shouldNarrow}
+        onSubTitleClick={hitokotoUrl ? refreshHitokoto : undefined}
       >
         <div className={styles["sidebar-header-bar"]}>
           <IconButton

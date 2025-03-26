@@ -11,6 +11,10 @@ declare global {
 
       BASE_URL?: string;
       OPENAI_ORG_ID?: string; // openai only
+      HITOKOTO_URL?: string; // 一言API地址
+      SIDE_BAR_TITLE?: string; // 侧边栏标题
+      SIDE_BAR_LOGO_URL?: string; // 侧边栏LOGO
+      ENABLE_ONLINE_MEMBER?: string; // 启用在线人数统计
 
       VERCEL?: string;
       BUILD_MODE?: "standalone" | "export";
@@ -177,6 +181,8 @@ export const getServerSideConfig = () => {
     baseUrl: process.env.BASE_URL,
     apiKey: getApiKey(process.env.OPENAI_API_KEY),
     openaiOrgId: process.env.OPENAI_ORG_ID,
+    hitokoToUrl: process.env.HITOKOTO_URL,
+    sideBarLogoUrl: process.env.SIDE_BAR_LOGO_URL,
 
     isStability,
     stabilityUrl: process.env.STABILITY_URL,
@@ -254,5 +260,6 @@ export const getServerSideConfig = () => {
     defaultModel,
     allowedWebDavEndpoints,
     enableMcp: process.env.ENABLE_MCP === "true",
+    enableOnlineMember: process.env.ENABLE_ONLINE_MEMBER === "true",
   };
 };

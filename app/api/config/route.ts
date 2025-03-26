@@ -16,6 +16,10 @@ const DANGER_CONFIG = {
   defaultModel: serverConfig.defaultModel,
   baseUrl: process.env.BASE_URL || "https://api.openai.com",
   apiKey: process.env.OPENAI_API_KEY ? "已设置" : "",
+  sideBarTitle: process.env.SIDE_BAR_TITLE || "NeatChat",
+  hitokotoUrl: process.env.HITOKOTO_URL || "",
+  sideBarLogoUrl: process.env.SIDE_BAR_LOGO_URL || "",
+  enableOnlineMember: serverConfig.enableOnlineMember || false,
 };
 
 declare global {
