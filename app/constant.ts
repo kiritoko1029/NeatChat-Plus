@@ -1,5 +1,5 @@
-export const OWNER = "tianzhentech";
-export const REPO = "NeatChat";
+export const OWNER = "kiritoko1029";
+export const REPO = "NeatChat-Plus";
 export const REPO_URL = `https://github.com/${OWNER}/${REPO}`;
 export const PLUGINS_REPO_URL = `https://github.com/ChatGPTNextWeb/NextChat-Awesome-Plugins`;
 export const ISSUE_URL = `https://github.com/${OWNER}/${REPO}/issues`;
