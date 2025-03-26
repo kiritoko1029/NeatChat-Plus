@@ -5,9 +5,6 @@
 
 <div align="center">
 
-
-![](https://raw.githubusercontent.com/tianzhentech/static/main/images/NeatChat-Dark.svg)
-
 ![Stars](https://img.shields.io/github/stars/kiritoko1029/NeatChat-Plus)
 ![Forks](https://img.shields.io/github/forks/kiritoko1029/NeatChat-Plus)
 ![Web](https://img.shields.io/badge/Web-PWA-orange?logo=microsoftedge)
@@ -17,7 +14,7 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kiritoko1029/NeatChat-Plus.git)
 
-简体中文 | [English](README.en.md)
+简体中文
 
 基于 NextChat 深度重构，一个更优雅、更强大的 AI 对话解决方案
 </div>
