@@ -1,6 +1,7 @@
 # NeatChat-Plus
 >感谢原作者们的付出，本仓库由 NextChat 和 NeatChat修改，添加了一些我认为比较好的功能。
->原仓库：https://github.com/tianzhentech/NeatChat，我将同步保持与此仓库的更新。
+>原仓库：https://github.com/tianzhentech/NeatChat
+>我将同步保持与此仓库的更新。
 
 <div align="center">
 
