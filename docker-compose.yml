@@ -3,7 +3,7 @@ services:
   NeatChat:
     profiles: [ "no-proxy" ]
     container_name: NeatChat
-    image: tianzhentech/chatgpt-next-web:latest
+    image: 195658/neatchat-plus:latest
     ports:
       - 3000:3000
     environment:
@@ -17,6 +17,10 @@ services:
       - ENABLE_BALANCE_QUERY=$ENABLE_BALANCE_QUERY
       - DISABLE_FAST_LINK=$DISABLE_FAST_LINK
       - OPENAI_SB=$OPENAI_SB
+      - SIDE_BAR_TITLE=$SIDE_BAR_TITLE
+      - ENABLE_ONLINE_MEMBER=$ENABLE_ONLINE_MEMBER
+      - SIDE_BAR_LOGO_URL=$SIDE_BAR_LOGO_URL
+      - HITOKOTO_URL=$HITOKOTO_URL
 
   NeatChat-proxy:
     profiles: [ "proxy" ]
@@ -36,3 +40,7 @@ services:
       - ENABLE_BALANCE_QUERY=$ENABLE_BALANCE_QUERY
       - DISABLE_FAST_LINK=$DISABLE_FAST_LINK
       - OPENAI_SB=$OPENAI_SB
+      - SIDE_BAR_TITLE=$SIDE_BAR_TITLE
+      - ENABLE_ONLINE_MEMBER=$ENABLE_ONLINE_MEMBER
+      - SIDE_BAR_LOGO_URL=$SIDE_BAR_LOGO_URL
+      - HITOKOTO_URL=$HITOKOTO_URL
