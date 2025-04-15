@@ -348,7 +348,11 @@ export class ChatGPTApi implements LLMApi {
             const tool_calls = choices[0]?.delta?.tool_calls;
             if (tool_calls?.length > 0) {
               const id = tool_calls[0]?.id;
-              const args = tool_calls[0]?.function?.arguments;
+              let args = tool_calls[0]?.function?.arguments;
+              // @ts-ignore
+              if (!(args.length > 0)) {
+                args = "";
+              }
               if (id) {
                 index += 1;
                 runTools.push({

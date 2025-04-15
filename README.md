@@ -14,6 +14,8 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kiritoko1029/NeatChat-Plus.git)
 
+
+
 简体中文
 
 基于 NextChat 深度重构，一个更优雅、更强大的 AI 对话解决方案
@@ -50,6 +52,11 @@ API返回格式应为：
 1. 支持vercel一键部署：[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kiritoko1029/NeatChat-Plus.git)
 
 2. docker只需要替换官方**yidadaa/chatgpt-next-web:版本号**为**kiritoko1029/chatgpt-next-web:latest**即可
+
+
+[![image](https://raw.githubusercontent.com/tianzhentech/static/main/images/20250409181441.png)](https://yxvm.com/)
+
+[NodeSupport](https://github.com/NodeSeekDev/NodeSupport)赞助了本项目
 
 <a>
 
