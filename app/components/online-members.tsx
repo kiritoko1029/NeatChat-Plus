@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import styles from "./home.module.scss";
 import UserIcon from "../icons/user.svg";
+import { useServerConfigStore } from "../store/config/client-config";
 
 // 本地存储密钥
 const LOCAL_STORAGE_CLIENT_ID_KEY = "online_client_id";
@@ -65,7 +66,10 @@ export function OnlineMembers() {
     return "";
   });
   const [fingerprint, setFingerprint] = useState<string>("");
-  const [enabled, setEnabled] = useState<boolean>(false);
+  const serverConfig = useServerConfigStore((state) => state.serverConfig);
+  const [enabled, setEnabled] = useState<boolean>(
+    serverConfig.enableOnlineMember || false,
+  );
   const [loading, setLoading] = useState<boolean>(true);
   const [initialized, setInitialized] = useState<boolean>(false);
 
@@ -114,28 +118,20 @@ export function OnlineMembers() {
         });
     };
 
-    // 初始化获取配置
-    fetch("/api/config")
-      .then((res) => res.json())
-      .then((data) => {
-        const isEnabled = !!data.enableOnlineMember;
-        setEnabled(isEnabled);
+    // 使用全局状态中的配置
+    const isEnabled = serverConfig.enableOnlineMember;
+    setEnabled(isEnabled);
 
-        if (!isEnabled) {
-          setLoading(false);
-          return;
-        }
+    if (!isEnabled) {
+      setLoading(false);
+      return;
+    }
 
-        // 如果启用了在线人数统计，立即进行第一次轮询
-        pollOnlineCount();
+    // 如果启用了在线人数统计，立即进行第一次轮询
+    pollOnlineCount();
 
-        // 设置定时轮询
-        timer = setInterval(pollOnlineCount, 30000); // 每30秒轮询一次
-      })
-      .catch((err) => {
-        console.error("[OnlineMembers] Failed to fetch config:", err);
-        setLoading(false);
-      });
+    // 设置定时轮询
+    timer = setInterval(pollOnlineCount, 30000); // 每30秒轮询一次
 
     // 清理函数
     return () => {
@@ -143,7 +139,7 @@ export function OnlineMembers() {
         clearInterval(timer);
       }
     };
-  }, [clientId, initialized]);
+  }, [clientId, initialized, serverConfig.enableOnlineMember]);
 
   // 如果未启用或正在加载，不显示组件
   if (!enabled && !loading) {

@@ -53,11 +53,6 @@ API返回格式应为：
 
 2. docker只需要替换官方**yidadaa/chatgpt-next-web:版本号**为**kiritoko1029/chatgpt-next-web:latest**即可
 
-
-[![image](https://raw.githubusercontent.com/tianzhentech/static/main/images/20250409181441.png)](https://yxvm.com/)
-
-[NodeSupport](https://github.com/NodeSeekDev/NodeSupport)赞助了本项目
-
 <a>
 
  <picture>

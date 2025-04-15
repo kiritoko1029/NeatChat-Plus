@@ -9,6 +9,7 @@ import { useAccessStore } from "../store";
 import CloseIcon from "../icons/close.svg";
 import EditIcon from "../icons/edit.svg";
 import ResetIcon from "../icons/reload.svg";
+import { useServerConfigStore } from "../store/config/client-config";
 import {
   getModelCategory,
   getFixedCategoryAvatar,
@@ -173,6 +174,52 @@ export function ModelSelectorModal(props: {
     return result;
   }, [models, systemCategoryPatterns]);
 
+  // 修改获取环境变量中自定义模型的函数，确保正确获取服务端配置
+  const getEnvCustomModels = async (): Promise<ModelInfo[]> => {
+    try {
+      // 使用 fetchConfig 方法确保获取到最新配置
+      const serverConfig = await useServerConfigStore.getState().fetchConfig();
+
+      // 确保有 customModels 数据
+      const customModelsStr = serverConfig.customModels || "";
+      console.log("[ModelSelector] 从服务端获取的自定义模型:", customModelsStr);
+
+      if (customModelsStr && customModelsStr.trim() !== "") {
+        // 处理 -all 特殊情况
+        if (customModelsStr.startsWith("-all,")) {
+          const modelsStr = customModelsStr.substring(5);
+          return modelsStr.split(",").map((modelStr) => {
+            // 处理包含 @ 的情况，如 "model@Category"
+            const [modelId] = modelStr.trim().split("@");
+            return {
+              id: modelId.trim(),
+              selected: currentModelList.includes(modelId.trim()),
+              isCustom: true,
+              isFromEnv: true, // 标记为环境变量中定义的模型
+            };
+          });
+        } else {
+          // 不包含 -all 的情况
+          return customModelsStr.split(",").map((modelStr) => {
+            const [modelId] = modelStr.trim().split("@");
+            return {
+              id: modelId.trim(),
+              selected: currentModelList.includes(modelId.trim()),
+              isCustom: true,
+              isFromEnv: true,
+            };
+          });
+        }
+      } else {
+        console.log("[ModelSelector] 服务端没有配置自定义模型");
+      }
+    } catch (error) {
+      console.error("[ModelSelector] 从环境变量获取自定义模型失败:", error);
+    }
+
+    return [];
+  };
+
   // 修改初始化函数，确保加载自定义模型
   const fetchModels = async (forceRefresh = false) => {
     setLoading(true);
@@ -180,7 +227,11 @@ export function ModelSelectorModal(props: {
     try {
       // 尝试从本地存储加载模型列表
       const storedModels = localStorage.getItem(MODELS_STORAGE_KEY);
+      const useCustomApi = accessStore.useCustomConfig;
 
+      // 判断优先级：
+      // 1. 如果强制刷新或没有本地存储，获取新数据
+      // 2. 如果有本地存储且不是强制刷新，优先使用本地存储
       if (storedModels && !forceRefresh) {
         // 如果有本地存储的模型列表且不是强制刷新，则使用本地存储的数据
         const parsedModels = JSON.parse(storedModels);
@@ -201,31 +252,25 @@ export function ModelSelectorModal(props: {
         return;
       }
 
-      // 检查用户是否已输入访问密码
-      if (!accessStore.isAuthorized()) {
-        showToast(Locale.Settings.Access.CustomModel.AuthRequired);
-        setLoading(false);
-        return;
-      }
+      // 策略：准备三个来源的模型列表，然后根据优先级合并
+      let apiModelList: ModelInfo[] = []; // API返回的模型
+      let customModelList: ModelInfo[] = []; // 用户自定义的模型
+      let envModelList: ModelInfo[] = []; // 环境变量中的模型
 
-      // 获取自定义模型列表
-      const customModelIds = currentModelList.filter((id) => id !== "-all");
+      // 1. 获取环境变量中的自定义模型
+      envModelList = await getEnvCustomModels();
 
-      // 从远程获取
-      const configResponse = await fetch("/api/config");
-      const configData = await configResponse.json();
+      // 2. 获取用户选择的自定义模型
+      // 从当前模型列表中提取自定义模型（除了 -all）
+      customModelList = currentModelList
+        .filter((id) => id !== "-all")
+        .map((id) => ({
+          id,
+          selected: true,
+          isCustom: true,
+        }));
 
-      // 检查是否启用了自定义接口
-      const useCustomApi = accessStore.useCustomConfig;
-
-      console.log("自定义接口状态:", useCustomApi);
-      console.log(
-        "客户端API密钥:",
-        accessStore.openaiApiKey ? "已设置" : "未设置",
-      );
-
-      let apiModelList = [];
-
+      // 3. 如果用户配置了自定义API，则从用户配置的API获取模型
       if (useCustomApi) {
         // 使用客户端配置
         const baseUrl = accessStore.openaiUrl || "https://api.openai.com";
@@ -233,6 +278,14 @@ export function ModelSelectorModal(props: {
 
         if (!apiKey) {
           showToast(Locale.Settings.Access.CustomModel.ApiKeyRequired);
+
+          // 即便没有API密钥，也可以继续处理环境变量模型和自定义模型
+          const allModels = mergeModelLists(customModelList, envModelList, []);
+          setModels(allModels);
+
+          // 保存到本地存储
+          localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(allModels));
+
           setLoading(false);
           return;
         }
@@ -271,21 +324,26 @@ export function ModelSelectorModal(props: {
               a.id.localeCompare(b.id),
             );
 
-            // 找出自定义模型名中已有的但不在API返回列表中的模型
-            const apiModelIds = apiModelList.map((m: ModelInfo) => m.id);
-            const customModels = currentModelList
-              .filter(
-                (modelId) =>
-                  !apiModelIds.includes(modelId) && modelId !== "-all",
-              )
-              .map((modelId) => ({
-                id: modelId,
-                selected: true,
-                isCustom: true,
-              }));
+            // 合并模型列表，按优先级：自定义 > 环境变量 > API
+            const allModels = mergeModelLists(
+              customModelList,
+              envModelList,
+              apiModelList,
+            );
+            console.log(
+              "[ModelSelector] 合并后的模型列表:",
+              allModels.map((m) => m.id).join(", "),
+            );
+            console.log(
+              "[ModelSelector] 环境变量模型:",
+              envModelList.map((m) => m.id).join(", "),
+            );
+            console.log(
+              "[ModelSelector] 用户自定义模型:",
+              customModelList.map((m) => m.id).join(", "),
+            );
+            console.log("[ModelSelector] API模型数量:", apiModelList.length);
 
-            // 合并API模型和自定义模型
-            const allModels = [...apiModelList, ...customModels];
             setModels(allModels);
 
             // 保存到本地存储
@@ -308,21 +366,45 @@ export function ModelSelectorModal(props: {
               error instanceof Error ? error.message : String(error),
             ),
           );
+
+          // 即便API失败，也使用环境变量和自定义模型
+          const allModels = mergeModelLists(customModelList, envModelList, []);
+          setModels(allModels);
+
+          // 保存到本地存储
+          localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(allModels));
+
           setLoading(false);
           return;
         }
       } else {
         // 使用服务端配置
-        const baseUrl = configData.baseUrl || "https://api.openai.com";
-
-        // 检查服务端是否设置了API密钥
-        if (configData.apiKey !== "已设置") {
-          showToast(Locale.Settings.Access.CustomModel.ApiKeyRequired);
-          setLoading(false);
-          return;
-        }
-
         try {
+          // 使用统一配置管理器获取配置，避免重复请求
+          const configData = await useServerConfigStore
+            .getState()
+            .fetchConfig();
+          const baseUrl = configData.baseUrl || "https://api.openai.com";
+
+          // 检查服务端是否设置了API密钥
+          if (configData.apiKey !== "已设置") {
+            showToast(Locale.Settings.Access.CustomModel.ApiKeyRequired);
+
+            // 即便没有API密钥，也可以继续处理环境变量模型和自定义模型
+            const allModels = mergeModelLists(
+              customModelList,
+              envModelList,
+              [],
+            );
+            setModels(allModels);
+
+            // 保存到本地存储
+            localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(allModels));
+
+            setLoading(false);
+            return;
+          }
+
           // 通过服务端代理请求
           const response = await fetch("/api/proxy", {
             method: "POST",
@@ -357,27 +439,33 @@ export function ModelSelectorModal(props: {
               a.id.localeCompare(b.id),
             );
 
-            // 找出自定义模型名中已有的但不在API返回列表中的模型
-            const apiModelIds = apiModelList.map((m: ModelInfo) => m.id);
-            const customModels = currentModelList
-              .filter(
-                (modelId) =>
-                  !apiModelIds.includes(modelId) && modelId !== "-all",
-              )
-              .map((modelId) => ({
-                id: modelId,
-                selected: true,
-                isCustom: true,
-              }));
+            // 合并模型列表，优先级：
+            // 如果用户配置了自定义接口 -> 自定义模型 > 环境变量模型 > API模型
+            // 否则 -> 环境变量模型 > 自定义模型 > API模型
+            const allModels = useCustomApi
+              ? mergeModelLists(customModelList, envModelList, apiModelList)
+              : mergeModelLists(envModelList, customModelList, apiModelList);
 
-            // 合并API模型和自定义模型
-            const allModels = [...apiModelList, ...customModels];
+            console.log(
+              "[ModelSelector] 合并后的模型列表:",
+              allModels.map((m) => m.id).join(", "),
+            );
+            console.log(
+              "[ModelSelector] 环境变量模型:",
+              envModelList.map((m) => m.id).join(", "),
+            );
+            console.log(
+              "[ModelSelector] 用户自定义模型:",
+              customModelList.map((m) => m.id).join(", "),
+            );
+            console.log("[ModelSelector] API模型数量:", apiModelList.length);
+
             setModels(allModels);
 
             // 保存到本地存储
             localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(allModels));
 
-            // 显示获取到的模型数量，指明是从服务端获取的
+            // 显示获取到的模型数量
             showToast(
               Locale.Settings.Access.CustomModel.FetchSuccessFromServer(
                 apiModelList.length,
@@ -394,6 +482,15 @@ export function ModelSelectorModal(props: {
               error instanceof Error ? error.message : String(error),
             ),
           );
+
+          // 即便API失败，也使用环境变量和自定义模型
+          // 优先级：环境变量 > 自定义模型（因为没有使用自定义接口）
+          const allModels = mergeModelLists(envModelList, customModelList, []);
+          setModels(allModels);
+
+          // 保存到本地存储
+          localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(allModels));
+
           setLoading(false);
           return;
         }
@@ -411,8 +508,53 @@ export function ModelSelectorModal(props: {
     }
   };
 
+  // 添加一个合并模型列表的辅助函数，按优先级合并三个来源的模型列表
+  const mergeModelLists = (
+    firstPriority: ModelInfo[],
+    secondPriority: ModelInfo[],
+    thirdPriority: ModelInfo[],
+  ): ModelInfo[] => {
+    // 创建ID查询表，方便快速查找
+    const modelIds = new Set<string>();
+    const result: ModelInfo[] = [];
+
+    // 添加第一优先级模型
+    firstPriority.forEach((model) => {
+      if (!modelIds.has(model.id)) {
+        result.push(model);
+        modelIds.add(model.id);
+      }
+    });
+
+    // 添加第二优先级模型
+    secondPriority.forEach((model) => {
+      if (!modelIds.has(model.id)) {
+        result.push(model);
+        modelIds.add(model.id);
+      }
+    });
+
+    // 添加第三优先级模型
+    thirdPriority.forEach((model) => {
+      if (!modelIds.has(model.id)) {
+        result.push(model);
+        modelIds.add(model.id);
+      }
+    });
+
+    return result;
+  };
+
   useEffect(() => {
-    fetchModels(false); // 传入false表示优先从本地加载
+    // 确保服务端配置加载完成后再获取模型列表
+    const initModels = async () => {
+      // 首先确保服务端配置已加载
+      await useServerConfigStore.getState().fetchConfig();
+      // 然后加载模型列表
+      fetchModels(false); // 传入false表示优先从本地加载
+    };
+
+    initModels();
   }, [accessStore.useCustomConfig]);
 
   const toggleModelSelection = (originalIndex: number) => {
@@ -656,7 +798,9 @@ export function ModelSelectorModal(props: {
       showToast(Locale.Settings.Access.CustomModel.AuthRequired);
       return;
     }
-    fetchModels(true); // 传入true表示强制从远程获取
+
+    // 强制重新加载模型，并考虑优先级逻辑
+    fetchModels(true);
   };
 
   // 在组件内部添加一个过滤后的模型列表计算

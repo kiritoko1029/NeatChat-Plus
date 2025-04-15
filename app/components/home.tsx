@@ -30,6 +30,7 @@ import { type ClientApi, getClientApi } from "../client/api";
 import { useAccessStore } from "../store";
 import clsx from "clsx";
 import { initializeMcpSystem, isMcpEnabled } from "../mcp/actions";
+import { useServerConfigStore } from "../store/config/client-config";
 
 export function Loading(props: { noLogo?: boolean }) {
   return (
@@ -238,10 +239,14 @@ export function Home() {
   useSwitchTheme();
   useLoadData();
   useHtmlLang();
+  const serverConfigStore = useServerConfigStore();
 
   useEffect(() => {
     console.log("[Config] got config from build time", getClientConfig());
     useAccessStore.getState().fetch();
+
+    // 初始化时加载服务器配置（只请求一次）
+    serverConfigStore.fetchConfig();
 
     const initMcp = async () => {
       try {

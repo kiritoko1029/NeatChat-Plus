@@ -289,7 +289,7 @@
 
 .chat-item:hover > .chat-item-delete {
   opacity: 0.5;
-  transform: translateX(-4px);
+  transform: translateX(-4px) translateY(4px);
 }
 
 .chat-item:hover > .chat-item-delete:hover {

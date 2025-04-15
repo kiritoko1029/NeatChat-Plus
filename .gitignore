@@ -48,3 +48,4 @@ dev
 cicd.sh
 masks.json
 app/mcp/mcp_config.json
+compose.local.yml

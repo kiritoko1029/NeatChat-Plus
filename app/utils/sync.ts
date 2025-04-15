@@ -30,25 +30,28 @@ export type GetStoreState<T> = T extends { getState: () => infer U }
   ? NonFunctionFields<U>
   : never;
 
-const LocalStateSetters = {
+// 修改为函数形式，确保在运行时而不是模块加载时访问store
+const getLocalStateSetters = () => ({
   [StoreKey.Chat]: useChatStore.setState,
   [StoreKey.Access]: useAccessStore.setState,
   [StoreKey.Config]: useAppConfig.setState,
   [StoreKey.Mask]: useMaskStore.setState,
   [StoreKey.Prompt]: usePromptStore.setState,
-} as const;
+});
 
-const LocalStateGetters = {
+// 修改为函数形式，确保在运行时而不是模块加载时访问store
+const getLocalStateGetters = () => ({
   [StoreKey.Chat]: () => getNonFunctionFileds(useChatStore.getState()),
   [StoreKey.Access]: () => getNonFunctionFileds(useAccessStore.getState()),
   [StoreKey.Config]: () => getNonFunctionFileds(useAppConfig.getState()),
   [StoreKey.Mask]: () => getNonFunctionFileds(useMaskStore.getState()),
   [StoreKey.Prompt]: () => getNonFunctionFileds(usePromptStore.getState()),
-} as const;
+});
 
+// 修改AppState类型定义
 export type AppState = {
-  [k in keyof typeof LocalStateGetters]: ReturnType<
-    (typeof LocalStateGetters)[k]
+  [k in keyof ReturnType<typeof getLocalStateGetters>]: ReturnType<
+    ReturnType<typeof getLocalStateGetters>[k]
   >;
 };
 
@@ -58,7 +61,7 @@ type Merger<T extends keyof AppState, U = AppState[T]> = (
 ) => U;
 
 type StateMerger = {
-  [K in keyof AppState]: Merger<K>;
+  [K in keyof ReturnType<typeof getLocalStateGetters>]: Merger<K>;
 };
 
 // we merge remote state to local state
@@ -119,8 +122,9 @@ const MergeStates: StateMerger = {
 };
 
 export function getLocalAppState() {
+  const getters = getLocalStateGetters();
   const appState = Object.fromEntries(
-    Object.entries(LocalStateGetters).map(([key, getter]) => {
+    Object.entries(getters).map(([key, getter]) => {
       return [key, getter()];
     }),
   ) as AppState;
@@ -129,7 +133,8 @@ export function getLocalAppState() {
 }
 
 export function setLocalAppState(appState: AppState) {
-  Object.entries(LocalStateSetters).forEach(([key, setter]) => {
+  const setters = getLocalStateSetters();
+  Object.entries(setters).forEach(([key, setter]) => {
     setter(appState[key as keyof AppState]);
   });
 }

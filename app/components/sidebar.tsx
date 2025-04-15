@@ -16,7 +16,7 @@ import LoadingIcon from "../icons/three-dots.svg";
 
 import Locale from "../locales";
 
-import { useAppConfig, useChatStore, useAccessStore } from "../store";
+import { useAppConfig, useChatStore } from "../store";
 
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -34,8 +34,8 @@ import dynamic from "next/dynamic";
 import { showConfirm, SimpleSelector } from "./ui-lib";
 import clsx from "clsx";
 import { isMcpEnabled, initializeMcpSystem } from "../mcp/actions";
-import { getClientConfig } from "../config/client";
 import { OnlineMembers } from "./online-members";
+import { useServerConfigStore } from "../store/config/client-config";
 
 const ChatList = dynamic(async () => (await import("./chat-list")).ChatList, {
   loading: () => null,
@@ -265,12 +265,20 @@ export function SideBar(props: { className?: string }) {
   const config = useAppConfig();
   const chatStore = useChatStore();
   const [mcpEnabled, setMcpEnabled] = useState(false);
-  const [sideBarTitle, setSideBarTitle] = useState("NeatChat");
+  const serverConfig = useServerConfigStore((state) => state.serverConfig);
+  const fetchServerConfig = useServerConfigStore((state) => state.fetchConfig);
+
+  // 使用服务器配置初始化状态
+  const [sideBarTitle, setSideBarTitle] = useState(
+    serverConfig.sideBarTitle || "NeatChat",
+  );
   const [sideBarSubTitle, setSideBarSubTitle] = useState(
     "A Better AI assistant.",
   );
-  const [hitokotoUrl, setHitokotoUrl] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
+  const [hitokotoUrl, setHitokotoUrl] = useState(
+    serverConfig.hitokotoUrl || "",
+  );
+  const [logoUrl, setLogoUrl] = useState(serverConfig.sideBarLogoUrl || "");
 
   // 自定义LOGO渲染组件
   const renderLogo = () => {
@@ -321,34 +329,26 @@ export function SideBar(props: { className?: string }) {
 
   // 初始化配置和MCP
   useEffect(() => {
-    console.log("[Config] got config from build time", getClientConfig());
-    useAccessStore.getState().fetch();
+    // 使用服务器配置（已在 Home 组件中加载）
+    fetchServerConfig().then((config) => {
+      // 设置侧边栏标题
+      if (config.sideBarTitle) {
+        setSideBarTitle(config.sideBarTitle);
+        console.log("[SideBar] Title:", config.sideBarTitle);
+      }
 
-    // 获取系统配置（只请求一次）
-    fetch("/api/config")
-      .then((res) => res.json())
-      .then((data) => {
-        // 设置侧边栏标题
-        if (data.sideBarTitle) {
-          setSideBarTitle(data.sideBarTitle);
-          console.log("[SideBar] Title:", data.sideBarTitle);
-        }
+      // 如果配置了一言API，则获取一言并保存URL
+      if (config.hitokotoUrl && config.hitokotoUrl.length > 0) {
+        setHitokotoUrl(config.hitokotoUrl);
+        fetchHitokoto(config.hitokotoUrl);
+      }
 
-        // 如果配置了一言API，则获取一言并保存URL
-        if (data.hitokotoUrl && data.hitokotoUrl.length > 0) {
-          setHitokotoUrl(data.hitokotoUrl);
-          fetchHitokoto(data.hitokotoUrl);
-        }
-
-        // 如果配置了LOGO URL，则保存
-        if (data.sideBarLogoUrl && data.sideBarLogoUrl.length > 0) {
-          setLogoUrl(data.sideBarLogoUrl);
-          console.log("[SideBar] Logo URL:", data.sideBarLogoUrl);
-        }
-      })
-      .catch((err) => {
-        console.error("[SideBar] Failed to fetch config:", err);
-      });
+      // 如果配置了LOGO URL，则保存
+      if (config.sideBarLogoUrl && config.sideBarLogoUrl.length > 0) {
+        setLogoUrl(config.sideBarLogoUrl);
+        console.log("[SideBar] Logo URL:", config.sideBarLogoUrl);
+      }
+    });
 
     // 初始化MCP系统
     const initMcp = async () => {
