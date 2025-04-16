@@ -75,6 +75,8 @@ export type AppConfig = {
   dontShowMaskSplashScreen: boolean;
   hideBuiltinMasks: boolean;
   customModels: string;
+  customModelsFromEnv: boolean;
+  userEditedCustomModels: boolean;
   models: LLMModel[];
   modelConfig: ModelConfig;
   ttsConfig: TTSConfig;
@@ -104,6 +106,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   dontShowMaskSplashScreen: true,
   hideBuiltinMasks: false,
   customModels: "",
+  customModelsFromEnv: false,
+  userEditedCustomModels: false,
   models: DEFAULT_MODELS as any as LLMModel[],
   modelConfig: {
     model: "gpt-4o-mini" as ModelType,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 
 import styles from "./settings.module.scss";
 
@@ -574,28 +574,108 @@ function SyncItems() {
   );
 }
 
-// 添加一个函数来从服务端获取 CUSTOM_MODELS 环境变量
+// 修改useServerCustomModels函数，添加刷新机制和环境变量变更检测
 function useServerCustomModels() {
   const [serverCustomModels, setServerCustomModels] = useState("");
+  const [lastFetchTime, setLastFetchTime] = useState(0);
   const config = useAppConfig();
+  const accessStore = useAccessStore();
 
+  // 使用ref存储最新状态值，减少依赖项
+  const lastFetchTimeRef = useRef(lastFetchTime);
+  const serverCustomModelsRef = useRef(serverCustomModels);
+  const configRef = useRef(config);
+  const accessStoreRef = useRef(accessStore);
+
+  // 更新所有ref的值
   useEffect(() => {
-    // 从服务端获取 CUSTOM_MODELS 环境变量
-    fetch("/api/config")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.customModels && !config.customModels) {
-          // 只有当客户端没有设置自定义模型时，才使用服务端的设置
-          config.update((config) => (config.customModels = data.customModels));
-          setServerCustomModels(data.customModels);
+    lastFetchTimeRef.current = lastFetchTime;
+    serverCustomModelsRef.current = serverCustomModels;
+    configRef.current = config;
+    accessStoreRef.current = accessStore;
+  }, [lastFetchTime, serverCustomModels, config, accessStore]);
+
+  // 添加刷新服务端配置的方法，不依赖任何state
+  const refreshServerConfig = useCallback(async (force = false) => {
+    // 使用ref获取最新值
+    const currentLastFetchTime = lastFetchTimeRef.current;
+    const currentConfig = configRef.current;
+
+    // 如果距离上次获取时间不到30秒且不是强制刷新，则跳过
+    if (!force && Date.now() - currentLastFetchTime < 30000) {
+      return serverCustomModelsRef.current;
+    }
+
+    try {
+      console.log("[Settings] 正在获取服务端自定义模型配置...");
+      const res = await fetch("/api/config");
+      const data = await res.json();
+
+      if (data.customModels) {
+        console.log("[Settings] 获取到服务端自定义模型:", data.customModels);
+        setServerCustomModels(data.customModels);
+        setLastFetchTime(Date.now());
+
+        // 只有当用户尚未手动编辑过自定义模型列表，且设置了从环境变量加载时，才使用环境变量中的模型
+        if (
+          currentConfig.customModelsFromEnv &&
+          !currentConfig.userEditedCustomModels
+        ) {
+          console.log(
+            "[Settings] 使用服务端自定义模型更新客户端配置，因为用户未手动编辑过",
+          );
+          currentConfig.update((config) => {
+            config.customModels = data.customModels;
+            return config;
+          });
+        } else {
+          console.log("[Settings] 保留用户配置的自定义模型列表");
         }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch server custom models:", err);
-      });
+
+        return data.customModels;
+      }
+    } catch (err) {
+      console.error("[Settings] 获取服务端自定义模型失败:", err);
+    }
+
+    return serverCustomModelsRef.current;
+    // 移除所有依赖，防止循环依赖导致的不必要重渲染
   }, []);
 
-  return serverCustomModels;
+  // 组件挂载时获取配置，确保只执行一次
+  useEffect(() => {
+    let isMounted = true;
+    let hasInitialized = false;
+
+    const fetchConfig = async () => {
+      if (isMounted && !hasInitialized) {
+        hasInitialized = true;
+        await refreshServerConfig(true);
+      }
+    };
+
+    fetchConfig();
+
+    // 设置定时器，每5分钟检查一次服务端配置是否更新
+    const intervalId = setInterval(
+      () => {
+        if (isMounted) {
+          refreshServerConfig(false);
+        }
+      },
+      5 * 60 * 1000,
+    );
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [refreshServerConfig]);
+
+  return {
+    serverCustomModels,
+    refreshServerConfig,
+  };
 }
 
 export function Settings() {
@@ -1371,7 +1451,7 @@ export function Settings() {
   );
 
   // 获取服务端的自定义模型设置
-  const serverCustomModels = useServerCustomModels();
+  const { serverCustomModels, refreshServerConfig } = useServerCustomModels();
 
   // 修改自定义模型输入框的处理逻辑
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -1389,11 +1469,13 @@ export function Settings() {
           type="text"
           value={config.customModels}
           placeholder={serverCustomModels || "model1,model2,model3"}
-          onChange={(e) =>
-            config.update(
-              (config) => (config.customModels = e.currentTarget.value),
-            )
-          }
+          onChange={(e) => {
+            config.update((config) => {
+              config.customModels = e.currentTarget.value;
+              config.userEditedCustomModels = true; // 标记用户已手动编辑过
+              return config;
+            });
+          }}
         ></input>
         <IconButton
           icon={<ResetIcon />}
@@ -1783,6 +1865,43 @@ export function Settings() {
         </List>
 
         <List id={SlotID.CustomModel}>
+          <ListItem title="隐藏用户API密钥" subTitle="在UI中隐藏API密钥输入框">
+            <input
+              type="checkbox"
+              checked={accessStore.hideUserApiKey}
+              onChange={(e) => {
+                accessStore.update(
+                  (access) => (access.hideUserApiKey = e.currentTarget.checked),
+                );
+              }}
+            ></input>
+          </ListItem>
+
+          <ListItem
+            title="从环境变量获取自定义模型"
+            subTitle="启用后，将从服务器环境变量获取自定义模型列表。注意：用户手动编辑过的模型列表将始终优先于环境变量"
+          >
+            <input
+              type="checkbox"
+              checked={config.customModelsFromEnv}
+              onChange={(e) => {
+                const useEnv = e.currentTarget.checked;
+                config.update((config) => {
+                  config.customModelsFromEnv = useEnv;
+                  // 如果启用了环境变量，并且用户未手动编辑过，则使用服务端模型
+                  if (
+                    useEnv &&
+                    !config.userEditedCustomModels &&
+                    serverCustomModels
+                  ) {
+                    config.customModels = serverCustomModels;
+                  }
+                  return config;
+                });
+              }}
+            ></input>
+          </ListItem>
+
           {accessCodeComponent}
 
           {!accessStore.hideUserApiKey && (
@@ -1914,8 +2033,12 @@ export function Settings() {
                 finalModels = "-all," + selectedModels;
               }
 
-              // 更新配置
-              config.update((config) => (config.customModels = finalModels));
+              // 更新配置，并标记为用户手动编辑过
+              config.update((config) => {
+                config.customModels = finalModels;
+                config.userEditedCustomModels = true; // 标记用户已手动编辑过
+                return config;
+              });
             }}
           />
         )}
