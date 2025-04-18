@@ -129,9 +129,14 @@ import {
   uploadAttachments,
   readFileAsText,
 } from "../utils/file";
-import { getAvailableClientsCount, isMcpEnabled } from "../mcp/actions";
+import {
+  getAvailableClientsCount,
+  isMcpEnabled,
+  getAllTools,
+} from "../mcp/actions";
 
 import { ImageEditor } from "./image-editor";
+import CloseIcon from "../icons/close.svg";
 
 const localStorage = safeLocalStorage();
 
@@ -473,6 +478,7 @@ export function ChatActions(props: {
   setShowShortcutKeyModal: React.Dispatch<React.SetStateAction<boolean>>;
   setUserInput: (input: string) => void;
   setShowChatSidePanel: React.Dispatch<React.SetStateAction<boolean>>;
+  showMcpToolPanel: () => void;
 }) {
   const config = useAppConfig();
   const navigate = useNavigate();
@@ -554,6 +560,28 @@ export function ChatActions(props: {
   }, [chatStore, currentModel, models, session]);
 
   const showModelSearchOption = config.enableModelSearch ?? false;
+
+  // 添加MCP工具按钮相关逻辑
+  const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [mcpToolsCount, setMcpToolsCount] = useState(0);
+
+  // 检查MCP是否启用及工具数量
+  useEffect(() => {
+    const checkMcpStatus = async () => {
+      try {
+        const enabled = await isMcpEnabled();
+        setMcpEnabled(enabled);
+        if (enabled) {
+          const count = await getAvailableClientsCount();
+          setMcpToolsCount(count);
+        }
+      } catch (error) {
+        console.error("Failed to check MCP status:", error);
+      }
+    };
+
+    checkMcpStatus();
+  }, []);
 
   return (
     <div className={styles["chat-input-actions"]}>
@@ -792,6 +820,14 @@ export function ChatActions(props: {
               });
             }}
             showSearch={false}
+          />
+        )}
+
+        {mcpEnabled && (
+          <ChatAction
+            onClick={props.showMcpToolPanel}
+            text={`MCP工具${mcpToolsCount > 0 ? ` (${mcpToolsCount})` : ""}`}
+            icon={<McpToolIcon />}
           />
         )}
 
@@ -1046,6 +1082,73 @@ function _Chat() {
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
   });
 
+  // 添加MCP工具快捷命令映射
+  const mcpToolCommands: Record<
+    string,
+    { clientId: string; toolName: string }
+  > = {
+    "/file": { clientId: "filesystem", toolName: "list_allowed_directories" },
+    "/search": { clientId: "brave-search", toolName: "search" },
+    "/web": { clientId: "fetch", toolName: "fetch" },
+    "/github": { clientId: "github", toolName: "search_repositories" },
+    "/sql": { clientId: "sqlite", toolName: "query" },
+    "/git": { clientId: "git", toolName: "status" },
+  };
+
+  // 检查用户输入是否应该使用MCP工具
+  const shouldUseMcpTool = (text: string): boolean => {
+    const mcpKeywords = [
+      "github",
+      "git",
+      "文件",
+      "搜索",
+      "网页",
+      "sql",
+      "数据库",
+      "repository",
+      "repos",
+      "查询",
+      "文档",
+      "代码",
+      "clone",
+      "commit",
+    ];
+
+    const lowerText = text.toLowerCase();
+    return mcpKeywords.some((keyword) => lowerText.includes(keyword));
+  };
+
+  // 检查消息是否包含MCP调用
+  const messageContainsMcpCall = (message: ChatMessage): boolean => {
+    if (!message.content) return false;
+
+    // 如果是字符串内容，检查是否包含MCP相关文本
+    if (typeof message.content === "string") {
+      return (
+        message.content.includes("<function_calls>") ||
+        message.content.includes("mcp_") ||
+        message.content.includes("使用工具")
+      );
+    }
+
+    // 如果是数组内容，检查每个部分
+    if (Array.isArray(message.content)) {
+      return message.content.some((part) => {
+        if (part && typeof part === "object" && "text" in part) {
+          const text = part.text as string;
+          return (
+            text.includes("<function_calls>") ||
+            text.includes("mcp_") ||
+            text.includes("使用工具")
+          );
+        }
+        return false;
+      });
+    }
+
+    return false;
+  };
+
   // only search prompts when user input is short
   const SEARCH_TEXT_LIMIT = 30;
   const onInput = (text: string) => {
@@ -1092,6 +1195,24 @@ function _Chat() {
 
     setUserInput(text);
     const n = text.trim().length;
+
+    // 检查是否是MCP工具命令前缀
+    const commandMatch = Object.keys(mcpToolCommands).find((cmd) =>
+      text.trim().startsWith(cmd),
+    );
+
+    if (commandMatch) {
+      // 如果是工具命令前缀，显示相应的提示
+      const { clientId, toolName } = mcpToolCommands[commandMatch];
+      const toolPrompt: RenderPrompt = {
+        title: `${commandMatch} - ${clientId}/${toolName}`,
+        content: `请使用 ${clientId} 客户端的 ${toolName} 工具来${text
+          .substring(commandMatch.length)
+          .trim()}`,
+      };
+      setPromptHints([toolPrompt]);
+      return;
+    }
 
     // 只有在启用快捷指令功能时才处理 "/" 开头的输入
     if (n === 1 && text === "/" && config.enablePromptHints) {
@@ -1158,6 +1279,40 @@ function _Chat() {
       setPromptHints([]);
       matchCommand.invoke();
       return;
+    }
+
+    // 判断是否应该使用MCP工具
+    const shouldUseTool = shouldUseMcpTool(finalUserInput);
+
+    // 获取最后一条消息
+    const lastMessage = session.messages[session.messages.length - 1];
+
+    // 如果应该使用工具但最后一条消息没有使用工具，提示用户
+    if (
+      shouldUseTool &&
+      lastMessage &&
+      lastMessage.role === "assistant" &&
+      !messageContainsMcpCall(lastMessage)
+    ) {
+      // 修改用户输入，添加明确的MCP调用提示
+      finalUserInput = `请使用适当的MCP工具来回答以下问题:\n\n${finalUserInput}`;
+      // 也可以选择显示提示而不修改输入
+      // showToast("您的问题可以使用MCP工具获得更准确的回答");
+    }
+
+    // 检查是否是工具命令
+    const commandMatch = Object.keys(mcpToolCommands).find((cmd) =>
+      finalUserInput.trim().startsWith(cmd),
+    );
+
+    if (commandMatch) {
+      const { clientId, toolName } = mcpToolCommands[commandMatch];
+      const params = finalUserInput.substring(commandMatch.length).trim();
+
+      // 构建明确的工具使用提示
+      finalUserInput = `请使用 ${clientId} 客户端的 ${toolName} 工具${
+        params ? `，参数是: ${params}` : ""
+      }`;
     }
 
     setIsLoading(true);
@@ -1909,6 +2064,26 @@ function _Chat() {
     string | null
   >(null);
 
+  // 添加状态用于控制MCP工具面板的显示
+  const [showMcpToolPanel, setShowMcpToolPanel] = useState(false);
+
+  // 添加工具选择处理函数
+  const handleMcpToolSelect = (clientId: string, toolName: string) => {
+    // 构建工具调用提示模板
+    const toolTemplate = `请使用 ${clientId} 客户端的 ${toolName} 工具，`;
+
+    // 如果用户已经输入了内容，保留它
+    if (userInput) {
+      setUserInput(`${toolTemplate}${userInput}`);
+    } else {
+      setUserInput(toolTemplate);
+    }
+
+    // 关闭工具面板并聚焦输入框
+    setShowMcpToolPanel(false);
+    inputRef.current?.focus();
+  };
+
   return (
     <div
       className={styles.chat}
@@ -2289,7 +2464,18 @@ function _Chat() {
               setShowShortcutKeyModal={setShowShortcutKeyModal}
               setUserInput={setUserInput}
               setShowChatSidePanel={setShowChatSidePanel}
+              // 新增显示MCP工具面板的函数
+              showMcpToolPanel={() => setShowMcpToolPanel(true)}
             />
+
+            {/* 显示MCP工具面板 */}
+            {showMcpToolPanel && (
+              <McpToolPanel
+                onToolSelect={handleMcpToolSelect}
+                onClose={() => setShowMcpToolPanel(false)}
+              />
+            )}
+
             <label
               className={clsx(styles["chat-input-panel-inner"], {
                 [styles["chat-input-panel-inner-attach"]]:
@@ -2591,4 +2777,90 @@ export function Chat() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   return <_Chat key={session.id}></_Chat>;
+}
+
+// 添加MCP工具面板组件
+function McpToolPanel(props: {
+  onToolSelect: (clientId: string, toolName: string) => void;
+  onClose: () => void;
+}) {
+  const [tools, setTools] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate(); // 添加这一行，引入navigate函数
+
+  useEffect(() => {
+    const loadTools = async () => {
+      try {
+        setLoading(true);
+        const allTools = await getAllTools();
+        setTools(allTools);
+      } catch (error) {
+        console.error("Failed to load MCP tools:", error);
+        showToast("加载MCP工具失败");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTools();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className={styles["mcp-tool-panel"]}>
+        <div className={styles["mcp-tool-panel-header"]}>
+          <div className={styles["mcp-tool-panel-title"]}>MCP工具</div>
+          <IconButton icon={<CloseIcon />} onClick={props.onClose} />
+        </div>
+        <div className={styles["mcp-tool-panel-loading"]}>加载中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles["mcp-tool-panel"]}>
+      <div className={styles["mcp-tool-panel-header"]}>
+        <div className={styles["mcp-tool-panel-title"]}>MCP工具</div>
+        <IconButton icon={<CloseIcon />} onClick={props.onClose} />
+      </div>
+      <div className={styles["mcp-tool-panel-content"]}>
+        {tools.length === 0 ? (
+          <div className={styles["mcp-tool-panel-empty"]}>
+            <p>没有可用的MCP工具</p>
+            <p>
+              <a onClick={() => navigate(Path.McpMarket)}>
+                点击这里添加MCP服务器
+              </a>
+            </p>
+          </div>
+        ) : (
+          tools.map((clientTools, index) => (
+            <div key={index} className={styles["mcp-tool-client"]}>
+              <div className={styles["mcp-tool-client-name"]}>
+                {clientTools.clientId}
+              </div>
+              <div className={styles["mcp-tool-list"]}>
+                {clientTools.tools?.tools?.map(
+                  (tool: any, toolIndex: number) => (
+                    <div
+                      key={toolIndex}
+                      className={styles["mcp-tool-item"]}
+                      onClick={() =>
+                        props.onToolSelect(clientTools.clientId, tool.name)
+                      }
+                    >
+                      <div className={styles["mcp-tool-name"]}>{tool.name}</div>
+                      <div className={styles["mcp-tool-description"]}>
+                        {tool.description}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
