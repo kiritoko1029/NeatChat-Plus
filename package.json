@@ -24,7 +24,7 @@
     "@hello-pangea/dnd": "^16.5.0",
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@next/third-parties": "^14.1.0",
-    "@svgr/webpack": "^6.5.1",
+    "@svgr/webpack": "^8.1.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vercel/analytics": "^0.1.11",
     "@vercel/speed-insights": "^1.0.2",
