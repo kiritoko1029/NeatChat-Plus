@@ -386,7 +386,7 @@ export function SideBar(props: { className?: string }) {
       }
     };
     initMcp();
-  }, []);
+  }, [fetchServerConfig]);
 
   return (
     <SideBarContainer

@@ -406,8 +406,7 @@ ${quotedContent}
   });
 }
 
-function _MarkDownContent(props: { content: string }) {
-  // 检测文件附件格式
+function MarkDownContentComponent(props: { content: string }) {
   const detectFileAttachments = (content: string) => {
     const fileRegex =
       /文件名: (.+?)\n类型: (.+?)\n大小: (.+?) KB\n\n([\s\S]+?)(?=\n\n---|$)/g;
@@ -619,7 +618,7 @@ function _MarkDownContent(props: { content: string }) {
 
           // 处理其他安全链接
           const isInternal = /^\/#/i.test(href);
-          const target = isInternal ? "_self" : aProps.target ?? "_blank";
+          const target = isInternal ? "_self" : (aProps.target ?? "_blank");
           const rel = !isInternal ? "noopener noreferrer" : undefined;
 
           return <a {...aProps} href={href} target={target} rel={rel} />;
@@ -636,7 +635,7 @@ function _MarkDownContent(props: { content: string }) {
   );
 }
 
-export const MarkdownContent = React.memo(_MarkDownContent);
+export const MarkdownContent = React.memo(MarkDownContentComponent);
 
 export function Markdown(
   props: {
@@ -818,11 +817,13 @@ export function Markdown(
         onDoubleClickCapture={props.onDoubleClickCapture}
         dir="auto"
       >
-        {props.loading ? (
-          <LoadingIcon />
-        ) : (
-          <MarkdownContent content={props.content} />
-        )}
+        <div className={clsx("markdown-body", { loading: props.loading })}>
+          {props.loading ? (
+            <LoadingIcon />
+          ) : (
+            <MarkdownContent content={props.content} />
+          )}
+        </div>
       </div>
 
       {/* Token信息显示 */}

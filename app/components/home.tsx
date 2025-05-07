@@ -31,6 +31,7 @@ import { useAccessStore } from "../store";
 import clsx from "clsx";
 import { initializeMcpSystem, isMcpEnabled } from "../mcp/actions";
 import { useServerConfigStore } from "../store/config/client-config";
+import { ChatComponent as Chat } from "./chat";
 
 export function Loading(props: { noLogo?: boolean }) {
   return (
@@ -46,10 +47,6 @@ const Artifacts = dynamic(async () => (await import("./artifacts")).Artifacts, {
 });
 
 const Settings = dynamic(async () => (await import("./settings")).Settings, {
-  loading: () => <Loading noLogo />,
-});
-
-const Chat = dynamic(async () => (await import("./chat")).Chat, {
   loading: () => <Loading noLogo />,
 });
 
@@ -261,7 +258,7 @@ export function Home() {
       }
     };
     initMcp();
-  }, []);
+  }, [serverConfigStore]);
 
   if (!useHasHydrated()) {
     return <Loading />;
