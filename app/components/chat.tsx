@@ -1287,19 +1287,6 @@ function _Chat() {
     // 获取最后一条消息
     const lastMessage = session.messages[session.messages.length - 1];
 
-    // 如果应该使用工具但最后一条消息没有使用工具，提示用户
-    if (
-      shouldUseTool &&
-      lastMessage &&
-      lastMessage.role === "assistant" &&
-      !messageContainsMcpCall(lastMessage)
-    ) {
-      // 修改用户输入，添加明确的MCP调用提示
-      finalUserInput = `请使用适当的MCP工具来回答以下问题:\n\n${finalUserInput}`;
-      // 也可以选择显示提示而不修改输入
-      // showToast("您的问题可以使用MCP工具获得更准确的回答");
-    }
-
     // 检查是否是工具命令
     const commandMatch = Object.keys(mcpToolCommands).find((cmd) =>
       finalUserInput.trim().startsWith(cmd),
