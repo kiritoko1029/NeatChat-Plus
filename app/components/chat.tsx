@@ -985,7 +985,7 @@ export function ShortcutKeyModal(props: { onClose: () => void }) {
   );
 }
 
-function _Chat() {
+function Chat() {
   type RenderMessage = ChatMessage & { preview?: boolean };
 
   const chatStore = useChatStore();
@@ -2760,10 +2760,10 @@ function _Chat() {
   );
 }
 
-export function Chat() {
+export function ChatComponent() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
-  return <_Chat key={session.id}></_Chat>;
+  return <Chat key={session.id} />;
 }
 
 // 添加MCP工具面板组件

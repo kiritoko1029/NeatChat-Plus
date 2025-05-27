@@ -298,32 +298,51 @@ export function SideBar(props: { className?: string }) {
 
   // 获取一言的函数
   const fetchHitokoto = (url: string) => {
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.hitokoto) {
-          // 构建包含来源和作者的副标题
-          let hitokotoText = data.hitokoto;
-          if (data.from) {
-            hitokotoText += ` —— ${data.from}`;
-            if (data.from_who) {
-              hitokotoText += `「${data.from_who}」`;
+    // 检查是否是URL格式
+    try {
+      new URL(url); // 尝试解析URL
+      // 是URL格式，则请求API
+      fetch(url)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.hitokoto) {
+            // 构建包含来源和作者的副标题
+            let hitokotoText = data.hitokoto;
+            if (data.from) {
+              hitokotoText += ` —— ${data.from}`;
+              if (data.from_who) {
+                hitokotoText += `「${data.from_who}」`;
+              }
             }
+            setSideBarSubTitle(hitokotoText);
+            console.log("[SideBar] Hitokoto:", hitokotoText);
           }
-          setSideBarSubTitle(hitokotoText);
-          console.log("[SideBar] Hitokoto:", hitokotoText);
-        }
-      })
-      .catch((err) => {
-        console.error("[SideBar] Failed to fetch hitokoto:", err);
-      });
+        })
+        .catch((err) => {
+          console.error("[SideBar] Failed to fetch hitokoto:", err);
+        });
+    } catch (e) {
+      // 不是URL格式，直接将内容设置为副标题
+      console.log("[SideBar] Hitokoto URL is not valid, using as text:", url);
+      setSideBarSubTitle(url);
+    }
   };
 
   // 刷新一言的函数
   const refreshHitokoto = () => {
-    if (hitokotoUrl) {
+    if (hitokotoUrl && isValidUrl(hitokotoUrl)) {
       console.log("[SideBar] Refreshing hitokoto from:", hitokotoUrl);
       fetchHitokoto(hitokotoUrl);
+    }
+  };
+
+  // 检查是否是有效的URL
+  const isValidUrl = (url: string) => {
+    try {
+      new URL(url);
+      return true;
+    } catch (e) {
+      return false;
     }
   };
 
@@ -337,7 +356,7 @@ export function SideBar(props: { className?: string }) {
         console.log("[SideBar] Title:", config.sideBarTitle);
       }
 
-      // 如果配置了一言API，则获取一言并保存URL
+      // 如果配置了一言API或文本，则处理并保存
       if (config.hitokotoUrl && config.hitokotoUrl.length > 0) {
         setHitokotoUrl(config.hitokotoUrl);
         fetchHitokoto(config.hitokotoUrl);
@@ -367,7 +386,7 @@ export function SideBar(props: { className?: string }) {
       }
     };
     initMcp();
-  }, []);
+  }, [fetchServerConfig]);
 
   return (
     <SideBarContainer
@@ -380,7 +399,9 @@ export function SideBar(props: { className?: string }) {
         subTitle={sideBarSubTitle}
         logo={renderLogo()}
         shouldNarrow={shouldNarrow}
-        onSubTitleClick={hitokotoUrl ? refreshHitokoto : undefined}
+        onSubTitleClick={
+          hitokotoUrl && isValidUrl(hitokotoUrl) ? refreshHitokoto : undefined
+        }
       >
         <div className={styles["sidebar-header-bar"]}>
           <IconButton

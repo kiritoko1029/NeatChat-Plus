@@ -444,6 +444,31 @@
           "key": "GITLAB_API_URL"
         }
       }
+    },
+    {
+      "id": "AMap",
+      "name": "AMap",
+      "description": "高德地图 API 服务，提供地理编码、地点搜索、路线规划等功能",
+      "repo": "https://github.com/modelcontextprotocol/servers/tree/main/src/amap",
+      "tags": ["AMap", "Geolocation", "API"],
+      "command": "npx",
+      "baseArgs": ["-y", "@amap/amap-maps-mcp-server"],
+      "configurable": true,
+      "configSchema": {
+        "properties": {
+          "AMAP_MAPS_API_KEY": {
+            "type": "string",
+            "description": "高德地图 API 密钥",
+            "required": true
+          }
+        }
+      },
+      "argsMapping": {
+        "AMAP_MAPS_API_KEY": {
+          "type": "env",
+          "key": "AMAP_MAPS_API_KEY"
+        }
+      }
     }
   ]
 } 
