@@ -6,6 +6,12 @@ console.log("[Next] build mode", mode);
 const disableChunk = !!process.env.DISABLE_CHUNK || mode === "export";
 console.log("[Next] build with chunk: ", !disableChunk);
 
+// 设置默认的SearXNG URL，如果环境变量中没有提供
+const defaultSearxngUrl = "https://searx.be";
+// 确保正确读取SEARXNG_URL环境变量
+const searxngUrl = process.env.SEARXNG_URL || defaultSearxngUrl;
+console.log("[Next] SearXNG URL:", searxngUrl);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   webpack(config) {
@@ -32,6 +38,11 @@ const nextConfig = {
   },
   experimental: {
     forceSwcTransforms: true,
+    esmExternals: 'loose',
+  },
+  env: {
+    // 将SEARXNG_URL传递给前端
+    NEXT_PUBLIC_SEARXNG_URL: searxngUrl,
   },
 };
 
@@ -97,6 +108,11 @@ if (mode !== "export") {
       {
         source: "/api/proxy/alibaba/:path*",
         destination: "https://dashscope.aliyuncs.com/api/:path*",
+      },
+      // 添加SearXNG代理
+      {
+        source: "/api/proxy/searxng/:path*",
+        destination: `${searxngUrl}/:path*`,
       },
     ];
     

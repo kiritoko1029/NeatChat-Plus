@@ -8,7 +8,8 @@ import RehypeRaw from "rehype-raw";
 import RehypeHighlight from "rehype-highlight";
 import { useRef, useState, RefObject, useEffect, useMemo } from "react";
 import { copyToClipboard, useWindowSize } from "../utils";
-import mermaid from "mermaid";
+// 注释掉 mermaid 导入，暂时禁用 mermaid 功能
+// import mermaid from "mermaid";
 import Locale from "../locales";
 import LoadingIcon from "../icons/three-dots.svg";
 import React from "react";
@@ -35,6 +36,8 @@ export function Mermaid(props: { code: string }) {
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
+    // 暂时禁用 mermaid 渲染功能
+    /*
     if (props.code && ref.current) {
       mermaid
         .run({
@@ -46,6 +49,7 @@ export function Mermaid(props: { code: string }) {
           console.error("[Mermaid] ", e.message);
         });
     }
+    */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.code]);
 
@@ -618,7 +622,7 @@ function MarkDownContentComponent(props: { content: string }) {
 
           // 处理其他安全链接
           const isInternal = /^\/#/i.test(href);
-          const target = isInternal ? "_self" : (aProps.target ?? "_blank");
+          const target = isInternal ? "_self" : aProps.target ?? "_blank";
           const rel = !isInternal ? "noopener noreferrer" : undefined;
 
           return <a {...aProps} href={href} target={target} rel={rel} />;

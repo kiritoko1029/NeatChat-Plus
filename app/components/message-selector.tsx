@@ -74,7 +74,7 @@ export function MessageSelector(props: {
   const LATEST_COUNT = 4;
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
-  const isValid = (m: ChatMessage) => m.content && !m.isError && !m.streaming;
+  const isValid = (m: ChatMessage) => m.content && !m.error && !m.streaming;
   const allMessages = useMemo(() => {
     let startIndex = Math.max(0, session.clearContextIndex ?? 0);
     if (startIndex === session.messages.length - 1) {
@@ -136,7 +136,7 @@ export function MessageSelector(props: {
     const [start, end] = [startIndex, endIndex].sort((a, b) => a - b);
     props.updateSelection((selection) => {
       for (let i = start; i <= end; i += 1) {
-        selection.add(messages[i].id ?? i);
+        selection.add(messages[i].id ?? i.toString());
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,7 +190,7 @@ export function MessageSelector(props: {
       <div className={styles["messages"]}>
         {messages.map((m, i) => {
           if (!isInSearchResult(m.id!)) return null;
-          const id = m.id ?? i;
+          const id = m.id ?? i.toString();
           const isSelected = props.selection.has(id);
 
           return (

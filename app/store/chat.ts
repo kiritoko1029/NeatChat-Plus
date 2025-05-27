@@ -9,11 +9,7 @@ import {
 
 import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
 import { nanoid } from "nanoid";
-import type {
-  ClientApi,
-  MultimodalContent,
-  RequestMessage,
-} from "../client/api";
+import type { ClientApi, MultimodalContent } from "../client/api";
 import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { showToast } from "../components/ui-lib";
@@ -56,16 +52,26 @@ export type ChatMessageTool = {
   errorMsg?: string;
 };
 
-export type ChatMessage = RequestMessage & {
+export type RequestMessage = {
+  role: Role;
+  content: string | MultimodalContent[];
+  exception?: boolean;
+  enabled?: boolean;
+  error?: boolean;
+  provider?: ModelProvider;
+  providerName?: ServiceProvider;
+  tools?: ChatMessageTool[];
+};
+
+export interface ChatMessage extends RequestMessage {
+  id?: string;
   date: string;
   streaming?: boolean;
-  isError?: boolean;
-  id: string;
   model?: ModelType;
-  tools?: ChatMessageTool[];
+  isInternalCall?: boolean; // 用于标记内部调用消息
   audio_url?: string;
   isMcpResponse?: boolean;
-};
+}
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
   return {
@@ -454,17 +460,17 @@ export const useChatStore = createPersistStore(
       async onUserInput(
         content: string,
         attachImages?: string[],
-        isMcpResponse?: boolean,
+        isInternalCall?: boolean,
       ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
 
         // MCP Response no need to fill template
-        let mContent: string | MultimodalContent[] = isMcpResponse
+        let mContent: string | MultimodalContent[] = isInternalCall
           ? content
           : fillTemplateWith(content, modelConfig);
 
-        if (!isMcpResponse && attachImages && attachImages.length > 0) {
+        if (!isInternalCall && attachImages && attachImages.length > 0) {
           mContent = [
             ...(content ? [{ type: "text" as const, text: content }] : []),
             ...attachImages.map((url) => ({
@@ -477,13 +483,14 @@ export const useChatStore = createPersistStore(
         let userMessage: ChatMessage = createMessage({
           role: "user",
           content: mContent,
-          isMcpResponse,
+          isInternalCall,
         });
 
         const botMessage: ChatMessage = createMessage({
           role: "assistant",
           streaming: true,
           model: modelConfig.model,
+          isInternalCall,
         });
 
         // get recent messages
@@ -497,80 +504,111 @@ export const useChatStore = createPersistStore(
             ...userMessage,
             content: mContent,
           };
-          session.messages = session.messages.concat([
-            savedUserMessage,
-            botMessage,
-          ]);
+
+          // 只有在非内部调用时才将消息添加到会话
+          if (!isInternalCall) {
+            session.messages = session.messages.concat([
+              savedUserMessage,
+              botMessage,
+            ]);
+          } else {
+            // 对于内部调用，我们仍然需要添加消息，但标记它们为内部消息
+            // 这样我们可以在后续处理中获取到生成的内容
+            session.messages = session.messages.concat([
+              { ...savedUserMessage, isInternalCall: true },
+              { ...botMessage, isInternalCall: true },
+            ]);
+          }
         });
 
-        const api: ClientApi = getClientApi(modelConfig.providerName);
-        // make request
-        api.llm.chat({
-          messages: sendMessages,
-          config: { ...modelConfig, stream: true },
-          onUpdate(message) {
-            botMessage.streaming = true;
-            if (message) {
-              botMessage.content = message;
-            }
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          onFinish(message) {
-            botMessage.streaming = false;
-            if (message) {
-              botMessage.content = message;
-              botMessage.date = new Date().toLocaleString();
-              get().onNewMessage(botMessage, session);
-            }
-            ChatControllerPool.remove(session.id, botMessage.id);
-          },
-          onBeforeTool(tool: ChatMessageTool) {
-            (botMessage.tools = botMessage?.tools || []).push(tool);
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          onAfterTool(tool: ChatMessageTool) {
-            botMessage?.tools?.forEach((t, i, tools) => {
-              if (tool.id == t.id) {
-                tools[i] = { ...tool };
+        return new Promise<string>((resolve) => {
+          const api: ClientApi = getClientApi(modelConfig.providerName);
+          // make request
+          api.llm.chat({
+            messages: sendMessages,
+            config: { ...modelConfig, stream: true },
+            onUpdate(message) {
+              botMessage.streaming = true;
+              if (message) {
+                botMessage.content = message;
               }
-            });
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-          },
-          onError(error) {
-            const isAborted = error.message?.includes?.("aborted");
-            botMessage.content +=
-              "\n\n" +
-              prettyObject({
-                error: true,
-                message: error.message,
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
               });
-            botMessage.streaming = false;
-            userMessage.isError = !isAborted;
-            botMessage.isError = !isAborted;
-            get().updateTargetSession(session, (session) => {
-              session.messages = session.messages.concat();
-            });
-            ChatControllerPool.remove(
-              session.id,
-              botMessage.id ?? messageIndex,
-            );
+            },
+            onFinish(message) {
+              botMessage.streaming = false;
+              if (message) {
+                botMessage.content = message;
+                botMessage.date = new Date().toLocaleString();
 
-            console.error("[Chat] failed ", error);
-          },
-          onController(controller) {
-            // collect controller for stop/retry
-            ChatControllerPool.addController(
-              session.id,
-              botMessage.id ?? messageIndex,
-              controller,
-            );
-          },
+                // 只有在非内部调用时才触发新消息处理
+                if (!isInternalCall) {
+                  get().onNewMessage(botMessage, session);
+                }
+
+                // 对于内部调用，我们返回生成的内容
+                if (isInternalCall) {
+                  resolve(
+                    typeof message === "string"
+                      ? message
+                      : JSON.stringify(message),
+                  );
+                }
+              }
+              ChatControllerPool.remove(session.id, botMessage.id);
+            },
+            onBeforeTool(tool: ChatMessageTool) {
+              (botMessage.tools = botMessage?.tools || []).push(tool);
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+            },
+            onAfterTool(tool: ChatMessageTool) {
+              botMessage?.tools?.forEach((t, i, tools) => {
+                if (tool.id == t.id) {
+                  tools[i] = { ...tool };
+                }
+              });
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+            },
+            onError(error) {
+              const isAborted = error.message?.includes?.("aborted");
+              botMessage.content +=
+                "\n\n" +
+                prettyObject({
+                  error: true,
+                  message: error.message,
+                });
+              botMessage.streaming = false;
+              userMessage.isError = !isAborted;
+              botMessage.isError = !isAborted;
+              get().updateTargetSession(session, (session) => {
+                session.messages = session.messages.concat();
+              });
+              ChatControllerPool.remove(
+                session.id,
+                botMessage.id ?? messageIndex,
+              );
+
+              console.error("[Chat] failed ", error);
+
+              // 对于内部调用，我们在错误时也需要解析 Promise
+              if (isInternalCall) {
+                resolve("");
+              }
+            },
+            onController(controller) {
+              // collect controller for stop/retry
+              ChatControllerPool.addController(
+                session.id,
+                botMessage.id ?? messageIndex,
+                controller,
+              );
+            },
+          });
         });
       },
 

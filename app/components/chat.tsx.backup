@@ -413,10 +413,14 @@ export function ChatAction(props: {
 
   return (
     <div
-      className={clsx(styles["chat-input-action"], "clickable", {
-        [styles["active"]]: props.active,
-        [styles["disabled"]]: props.disabled,
-      })}
+      className={clsx(
+        styles["chat-input-action"],
+        "clickable",
+        {
+          [styles["active"]]: props.active,
+          [styles["disabled"]]: props.disabled,
+        }
+      )}
       onClick={() => {
         if (!props.disabled) {
           props.onClick();
@@ -487,6 +491,8 @@ export function ChatActions(props: {
   setUserInput: (input: string) => void;
   setShowChatSidePanel: React.Dispatch<React.SetStateAction<boolean>>;
   showMcpToolPanel: () => void;
+  isWebSearchEnabled: boolean; // 新增 prop
+  setIsWebSearchEnabled: (enabled: boolean) => void; // 新增 prop
 }) {
   const config = useAppConfig();
   const navigate = useNavigate();
@@ -852,18 +858,14 @@ export function ChatActions(props: {
         )}
         {/* 添加网络搜索按钮 */}
         <ChatAction
-          onClick={() => {
-            const newState = !config.enableWebSearch;
-            config.update((config) => (config.enableWebSearch = newState));
-            showToast(newState ? "网络搜索已启用" : "网络搜索已禁用");
-          }}
-          text={
-            config.enableWebSearch
-              ? "网络搜索 (已启用)"
-              : Locale.Chat.InputActions.Search
-          }
-          icon={<WebSearchIcon />}
-          active={config.enableWebSearch}
+            onClick={() => {
+              const newState = !props.isWebSearchEnabled;
+              props.setIsWebSearchEnabled(newState);
+              showToast(newState ? "网络搜索已启用" : "网络搜索已禁用");
+            }}
+            text={props.isWebSearchEnabled ? "网络搜索 (已启用)" : Locale.Chat.InputActions.Search}
+            icon={<WebSearchIcon />}
+            active={props.isWebSearchEnabled}
         />
       </>
       <div className={styles["chat-input-actions-end"]}>
@@ -1020,8 +1022,7 @@ function Chat() {
   const config = useAppConfig();
   const fontSize = config.fontSize;
   const fontFamily = config.fontFamily;
-  // 移除本地的网络搜索状态，改用全局配置
-  // const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false);
+  const [isWebSearchEnabled, setIsWebSearchEnabled] = useState(false); // 新增状态
 
   const [showExport, setShowExport] = useState(false);
 
@@ -1062,8 +1063,6 @@ function Chat() {
   const [uploading, setUploading] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<FileInfo[]>([]);
-  // 添加网络搜索加载状态
-  const [isWebSearching, setIsWebSearching] = useState(false);
 
   // prompt hints
   const promptStore = usePromptStore();
@@ -1284,9 +1283,9 @@ function Chat() {
       const fileInfosText = attachedFiles
         .map(
           (file) =>
-            `文件名: ${file.name}\n类型: ${file.type}\n大小: ${(
-              file.size / 1024
-            ).toFixed(2)} KB\n\n${file.content}`,
+            `文件名: ${file.name}\n类型: ${file.type}\n大小: ${
+              (file.size / 1024).toFixed(2)
+            } KB\n\n${file.content}`,
         )
         .join("\n\n---\n\n");
       finalUserInput = finalUserInput
@@ -1319,45 +1318,36 @@ function Chat() {
     const originalQuestion = finalUserInput;
     let webSearchResults = "";
     let webSearchContentForAI = ""; // 用于拼接到AI回复开头的搜索结果内容
-
+    
     // 如果启用了网络搜索，执行搜索
-    if (config.enableWebSearch) {
-      // 设置搜索加载状态
-      setIsWebSearching(true);
-
+    if (isWebSearchEnabled) {
+      // 显示临时的加载提示
+      showToast("正在搜索网络获取相关信息...");
+      
       try {
-        console.log("🔍 开始网络搜索...");
-
+        console.log("开始网络搜索...");
+        
         // 使用web-search API调用SearXNG
-        const searchUrl = `/api/web-search?q=${encodeURIComponent(
-          originalQuestion,
-        )}`;
-        console.log("📡 使用搜索URL:", searchUrl);
-
+        const searchUrl = `/api/web-search?q=${encodeURIComponent(originalQuestion)}`;
+        console.log("使用搜索URL:", searchUrl);
+        
         const searchResponse = await fetch(searchUrl);
-
+        
         if (!searchResponse.ok) {
-          throw new Error(
-            `搜索请求失败: ${searchResponse.status} ${searchResponse.statusText}`,
-          );
+          throw new Error(`搜索请求失败: ${searchResponse.status} ${searchResponse.statusText}`);
         }
-
+        
         // 处理搜索结果
         const searchData = await searchResponse.json();
-
+        
         if (searchData.results && searchData.results.length > 0) {
           // 格式化搜索结果为Markdown格式
-          webSearchResults = searchData.results
-            .map(
-              (result: any, index: number) =>
-                `${index + 1}. **${result.title}**\n   ${
-                  result.snippet || ""
-                }\n   [来源链接](${result.link})\n`,
-            )
-            .join("\n");
-
-          console.log("✅ 搜索完成，找到", searchData.results.length, "个结果");
-
+          webSearchResults = searchData.results.map((result: any, index: number) => 
+            `${index + 1}. **${result.title}**\n   ${result.snippet || ""}\n   [来源链接](${result.link})\n`
+          ).join("\n");
+          
+          console.log("搜索结果:", webSearchResults);
+          
           // 准备要拼接到AI回复开头的搜索结果内容
           webSearchContentForAI = `<details>
 <summary>🔍 网络搜索结果 (${searchData.results.length})</summary>
@@ -1379,16 +1369,16 @@ ${webSearchResults}`;
           const userMessageWithSearch = `${originalQuestion}
 
 ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
-
+          
           // 如果需要显示在用户消息中作为备用，可以使用这个版本
           // finalUserInput = userMessageWithSearch;
-
+          
           // 临时启用备用方案：将搜索结果显示在用户消息中
           finalUserInput = userMessageWithSearch;
         } else {
           webSearchResults = "未找到相关搜索结果。";
-          console.log("⚠️ 未找到搜索结果");
-
+          console.log("未找到搜索结果");
+          
           // 准备要拼接到AI回复开头的无结果内容
           webSearchContentForAI = `<details>
 <summary>🔍 网络搜索结果</summary>
@@ -1400,8 +1390,9 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
 `;
         }
+        
       } catch (error) {
-        console.error("❌ 网络搜索失败:", error);
+        console.error("网络搜索失败:", error);
         // 搜索出错也添加一个提示到AI回复中
         webSearchContentForAI = `<details>
 <summary>🔍 网络搜索失败</summary>
@@ -1413,97 +1404,79 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 ---
 
 `;
-
+        
         // 显示错误提示
-        showToast(
-          `网络搜索失败: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      } finally {
-        // 搜索完成，清除加载状态
-        setIsWebSearching(false);
+        showToast(`网络搜索失败: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
     // 发送消息
     const messagePromise = chatStore.onUserInput(finalUserInput, attachImages);
-
+    
     // 如果有搜索结果需要拼接，等待AI回复开始后进行拼接
-    if (config.enableWebSearch && webSearchContentForAI) {
-      messagePromise
-        .then(() => {
-          console.log("消息发送完成，开始监听AI回复...");
-
-          // 使用定时器等待AI消息创建
-          let retryCount = 0;
-          const maxRetries = 50; // 最多重试50次，即10秒
-
-          const addSearchResults = () => {
-            const currentSession = chatStore.currentSession();
-            const messages = currentSession.messages;
-            const lastMessage = messages[messages.length - 1];
-
-            console.log(`尝试添加搜索结果 (${retryCount + 1}/${maxRetries})`, {
-              hasLastMessage: !!lastMessage,
-              messageRole: lastMessage?.role,
-              messageContentType: typeof lastMessage?.content,
-              hasSearchResults:
-                typeof lastMessage?.content === "string"
-                  ? lastMessage.content.includes("🔍 网络搜索结果")
-                  : false,
-              messageLength:
-                typeof lastMessage?.content === "string"
-                  ? lastMessage.content.length
-                  : 0,
-            });
-
-            if (
-              lastMessage &&
-              lastMessage.role === "assistant" &&
-              typeof lastMessage.content === "string" &&
-              !lastMessage.content.includes("🔍 网络搜索结果")
-            ) {
-              console.log("✅ 检测到AI消息，正在添加搜索结果");
-
-              // 拼接搜索结果到AI消息开头
-              chatStore.updateTargetSession(currentSession, (targetSession) => {
-                const msgIndex = targetSession.messages.length - 1;
-                if (
-                  msgIndex >= 0 &&
+    if (isWebSearchEnabled && webSearchContentForAI) {
+      messagePromise.then(() => {
+        console.log("消息发送完成，开始监听AI回复...");
+        
+        // 使用定时器等待AI消息创建
+        let retryCount = 0;
+        const maxRetries = 50; // 最多重试50次，即10秒
+        
+        const addSearchResults = () => {
+          const currentSession = chatStore.currentSession();
+          const messages = currentSession.messages;
+          const lastMessage = messages[messages.length - 1];
+          
+          console.log(`尝试添加搜索结果 (${retryCount + 1}/${maxRetries})`, {
+            hasLastMessage: !!lastMessage,
+            messageRole: lastMessage?.role,
+            messageContentType: typeof lastMessage?.content,
+            hasSearchResults: typeof lastMessage?.content === 'string' ? lastMessage.content.includes('🔍 网络搜索结果') : false,
+            messageLength: typeof lastMessage?.content === 'string' ? lastMessage.content.length : 0
+          });
+          
+          if (lastMessage && 
+              lastMessage.role === "assistant" && 
+              typeof lastMessage.content === 'string' &&
+              !lastMessage.content.includes('🔍 网络搜索结果')) {
+            
+            console.log("✅ 检测到AI消息，正在添加搜索结果");
+            
+            // 拼接搜索结果到AI消息开头
+            chatStore.updateTargetSession(currentSession, (targetSession) => {
+              const msgIndex = targetSession.messages.length - 1;
+              if (msgIndex >= 0 && 
                   targetSession.messages[msgIndex].role === "assistant" &&
-                  typeof targetSession.messages[msgIndex].content === "string"
-                ) {
-                  const originalContent =
-                    targetSession.messages[msgIndex].content;
-                  targetSession.messages[msgIndex].content =
-                    webSearchContentForAI + originalContent;
-
-                  console.log("✅ 搜索结果已成功添加到消息", {
-                    originalLength: originalContent.length,
-                    newLength: targetSession.messages[msgIndex].content.length,
-                  });
-                }
-              });
-
-              return; // 成功添加，停止重试
-            }
-
-            retryCount++;
-            if (retryCount < maxRetries) {
-              // 如果AI消息还未创建，继续等待
-              setTimeout(addSearchResults, 200);
-            } else {
-              console.warn("❌ 添加搜索结果超时，停止重试");
-            }
-          };
-
-          // 开始监听，稍微延迟以确保消息已经添加
-          setTimeout(addSearchResults, 300);
-        })
-        .catch((error) => {
-          console.error("❌ 发送消息失败:", error);
-        });
+                  typeof targetSession.messages[msgIndex].content === 'string') {
+                
+                const originalContent = targetSession.messages[msgIndex].content;
+                targetSession.messages[msgIndex].content = 
+                  webSearchContentForAI + originalContent;
+                
+                console.log("✅ 搜索结果已成功添加到消息", {
+                  originalLength: originalContent.length,
+                  newLength: targetSession.messages[msgIndex].content.length
+                });
+              }
+            });
+            
+            return; // 成功添加，停止重试
+          } 
+          
+          retryCount++;
+          if (retryCount < maxRetries) {
+            // 如果AI消息还未创建，继续等待
+            setTimeout(addSearchResults, 200);
+          } else {
+            console.warn("❌ 添加搜索结果超时，停止重试");
+          }
+        };
+        
+        // 开始监听，稍微延迟以确保消息已经添加
+        setTimeout(addSearchResults, 300);
+      }).catch((error) => {
+        console.error("❌ 发送消息失败:", error);
+      });
     }
 
     messagePromise.finally(() => {
@@ -1747,7 +1720,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
   const renderMessages = useMemo(() => {
     return context
       .concat(session.messages as RenderMessage[])
-      .filter((message) => !message.isInternalCall) // 过滤掉内部调用消息
+      .filter(message => !message.isInternalCall) // 过滤掉内部调用消息
       .concat(
         userInput.length > 0 && config.sendPreviewBubble
           ? [
@@ -2544,9 +2517,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                                   alt=""
                                   onClick={() => {
                                     setEditingImage(image);
-                                    setEditingImageMessageId(
-                                      message.id || null,
-                                    ); // 修复undefined的情况
+                                    setEditingImageMessageId(message.id || null); // 修复undefined的情况
                                   }}
                                 />
                               );
@@ -2646,7 +2617,8 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
               setShowChatSidePanel={setShowChatSidePanel}
               // 新增显示MCP工具面板的函数
               showMcpToolPanel={() => setShowMcpToolPanel(true)}
-              // 移除不再需要的网络搜索props，现在在ChatActions内部使用全局配置
+              isWebSearchEnabled={isWebSearchEnabled} // 新增 prop
+              setIsWebSearchEnabled={setIsWebSearchEnabled} // 新增 prop
             />
 
             {/* 显示MCP工具面板 */}
@@ -2664,14 +2636,6 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
               })}
               htmlFor="chat-input"
             >
-              {/* 网络搜索加载提示 */}
-              {isWebSearching && (
-                <div className={styles["web-search-loading"]}>
-                  <LoadingIcon />
-                  <span>🔍 正在搜索网络获取相关信息...</span>
-                </div>
-              )}
-
               <textarea
                 id="chat-input"
                 ref={inputRef}
@@ -2689,7 +2653,6 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                 onPaste={handlePaste}
                 rows={inputRows}
                 autoFocus={autoFocus}
-                disabled={isWebSearching} // 搜索时禁用输入
                 style={{
                   fontSize: config.fontSize,
                   fontFamily: config.fontFamily,
@@ -2791,7 +2754,6 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                 className={styles["chat-input-send"]}
                 type="primary"
                 onClick={() => doSubmit(userInput)}
-                disabled={isWebSearching} // 搜索时禁用发送按钮
               />
             </label>
           </div>

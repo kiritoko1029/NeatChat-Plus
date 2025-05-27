@@ -1789,6 +1789,22 @@ export function Settings() {
               }
             />
           </ListItem>
+
+          <ListItem
+            title="启用网络搜索"
+            subTitle="启用后可以在聊天中使用网络搜索功能，提供实时信息"
+          >
+            <input
+              type="checkbox"
+              checked={config.enableWebSearch}
+              onChange={(e) =>
+                updateConfig(
+                  (config) =>
+                    (config.enableWebSearch = e.currentTarget.checked),
+                )
+              }
+            />
+          </ListItem>
         </List>
 
         <SyncItems />

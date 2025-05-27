@@ -170,7 +170,7 @@ export function MessageExporter() {
     if (exportConfig.includeContext) {
       ret.push(...session.mask.context);
     }
-    ret.push(...session.messages.filter((m) => selection.has(m.id)));
+    ret.push(...session.messages.filter((m) => m.id && selection.has(m.id)));
     return ret;
   }, [
     exportConfig.includeContext,

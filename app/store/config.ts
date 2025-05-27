@@ -87,6 +87,7 @@ export type AppConfig = {
   enableClearContext: boolean;
   enablePlugins: boolean;
   enableShortcuts: boolean;
+  enableWebSearch: boolean;
 };
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -154,6 +155,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   enableClearContext: true,
   enablePlugins: false,
   enableShortcuts: false,
+  enableWebSearch: false,
 };
 
 export type ChatConfig = typeof DEFAULT_CONFIG;
