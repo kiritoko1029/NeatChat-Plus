@@ -20,6 +20,7 @@ ENV OPENAI_API_KEY=""
 ENV GOOGLE_API_KEY=""
 ENV CODE=""
 ENV ENABLE_MCP=""
+ENV SEARXNG_URL=""
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -35,6 +36,7 @@ ENV PROXY_URL=""
 ENV OPENAI_API_KEY=""
 ENV GOOGLE_API_KEY=""
 ENV CODE=""
+ENV SEARXNG_URL=""
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

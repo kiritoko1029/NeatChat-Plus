@@ -31,6 +31,8 @@
 | `SIDE_BAR_LOGO_URL`   | 自定义侧边栏LOGO图片URL               | 默认使用内置NeatIcon        | `SIDE_BAR_LOGO_URL=https://example.com/logo.png` |
 | `HITOKOTO_URL`        | 一言API地址                           | 无（不启用一言功能）        | `HITOKOTO_URL=https://v1.hitokoto.cn`    |
 | `ENABLE_ONLINE_MEMBER`| 是否启用在线人数统计                  | false                       | `ENABLE_ONLINE_MEMBER=true`              |
+| `SEARXNG_URL`         | SearXNG搜索引擎实例地址               | 无（使用模拟搜索数据）      | `SEARXNG_URL=https://searx.example.com`  |
+| `CUSTOM_MODEL`        | 自定义模型配置                        | 无                          | `CUSTOM_MODEL=-all,+gpt-4o,+claude-3-7-sonnet` |
 
 ### 一言API
 
@@ -48,6 +50,21 @@ API返回格式应为：
 ### 在线人数统计
 
 启用`ENABLE_ONLINE_MEMBER=true`后，系统会自动统计并显示当前访问网站的用户数量，该功能使用浏览器指纹技术确保计数准确性。
+
+### SearXNG网络搜索
+
+配置`SEARXNG_URL`后，系统会使用指定的SearXNG实例进行网络搜索，支持AI模型进行实时网络信息获取和查询。SearXNG是一个隐私友好的元搜索引擎，可自行搭建或使用公共实例。
+
+若未配置此变量，系统将使用模拟数据进行开发测试。
+
+### 自定义模型配置
+
+通过`CUSTOM_MODEL`变量可以自定义模型列表，格式如下：
+- `-all` 移除所有默认模型
+- `+模型名称` 添加指定模型
+- `自定义名称@提供商` 添加带自定义显示名称的模型
+
+例如：`-all,qwq-plus-latest@Qwen,+gpt-4.1,+gpt-4o,+claude-3-7-sonnet`表示清空默认模型列表，添加一个自定义名称的千问模型，并添加GPT-4.1、GPT-4o和Claude-3.7-Sonnet模型。
 
 1. 支持vercel一键部署：[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/kiritoko1029/NeatChat-Plus.git)
 
