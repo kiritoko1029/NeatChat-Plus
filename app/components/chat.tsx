@@ -67,6 +67,7 @@ import {
   autoGrowTextArea,
   useMobileScreen,
   getMessageTextContent,
+  getMessageTextContentForDisplay,
   getMessageImages,
   isVisionModel,
   isDalle3,
@@ -487,6 +488,7 @@ export function ChatActions(props: {
   setUserInput: (input: string) => void;
   setShowChatSidePanel: React.Dispatch<React.SetStateAction<boolean>>;
   showMcpToolPanel: () => void;
+  showWebSearchConfig: () => void;
 }) {
   const config = useAppConfig();
   const navigate = useNavigate();
@@ -618,7 +620,7 @@ export function ChatActions(props: {
 
         <ChatAction
           onClick={props.uploadAttachments}
-          text={"上传附件"}
+          text={Locale.Chat.InputActions.UploadAttachment}
           icon={props.uploading ? <LoadingButtonIcon /> : <AttachmentIcon />}
           disabled={props.uploading}
         />
@@ -837,7 +839,7 @@ export function ChatActions(props: {
         {mcpEnabled && (
           <ChatAction
             onClick={props.showMcpToolPanel}
-            text={`MCP工具${mcpToolsCount > 0 ? ` (${mcpToolsCount})` : ""}`}
+            text={Locale.Chat.McpTools.ToolCount(mcpToolsCount)}
             icon={<McpToolIcon />}
             active={mcpToolsCount > 0}
           />
@@ -852,18 +854,14 @@ export function ChatActions(props: {
         )}
         {/* 添加网络搜索按钮 */}
         <ChatAction
-          onClick={() => {
-            const newState = !config.enableWebSearch;
-            config.update((config) => (config.enableWebSearch = newState));
-            showToast(newState ? "网络搜索已启用" : "网络搜索已禁用");
-          }}
+          onClick={() => props.showWebSearchConfig()}
           text={
-            config.enableWebSearch
-              ? "网络搜索 (已启用)"
+            config.webSearchConfig.enable
+              ? Locale.Chat.WebSearch.Enabled
               : Locale.Chat.InputActions.Search
           }
           icon={<WebSearchIcon />}
-          active={config.enableWebSearch}
+          active={config.webSearchConfig.enable}
         />
       </>
       <div className={styles["chat-input-actions-end"]}>
@@ -947,6 +945,210 @@ export function DeleteImageButton(props: { deleteImage: (e?: any) => void }) {
   return (
     <div className={styles["delete-image"]} onClick={props.deleteImage}>
       <DeleteIcon />
+    </div>
+  );
+}
+
+export function WebSearchConfigModal(props: { onClose: () => void }) {
+  const config = useAppConfig();
+  const [tempConfig, setTempConfig] = useState({
+    enable: config.webSearchConfig.enable,
+    maxResults: config.webSearchConfig.maxResults,
+    aiGenerateKeywords: config.webSearchConfig.aiGenerateKeywords,
+    defaultCollapsed: config.webSearchConfig.defaultCollapsed,
+    searxngUrl: config.webSearchConfig.searxngUrl,
+  });
+  const [envSearxngUrl, setEnvSearxngUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // 获取服务端SEARXNG_URL配置状态
+  useEffect(() => {
+    const fetchEnvConfig = async () => {
+      try {
+        const response = await fetch("/api/env-config");
+        if (response.ok) {
+          const data = await response.json();
+          setEnvSearxngUrl(data.searxngUrl || null);
+        }
+      } catch (error) {
+        console.error("获取环境配置失败:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEnvConfig();
+  }, []);
+
+  return (
+    <div className="modal-mask">
+      <Modal
+        title={Locale.Chat.WebSearch.ConfigTitle}
+        onClose={props.onClose}
+        actions={[
+          <IconButton
+            text={Locale.UI.Cancel}
+            icon={<CancelIcon />}
+            key="cancel"
+            onClick={() => {
+              props.onClose();
+            }}
+          />,
+          <IconButton
+            type="primary"
+            text={Locale.UI.Confirm}
+            icon={<ConfirmIcon />}
+            key="ok"
+            onClick={() => {
+              config.update((config) => {
+                config.webSearchConfig = { ...tempConfig };
+                // 同步更新旧的enableWebSearch字段以保持兼容性
+                config.enableWebSearch = tempConfig.enable;
+              });
+              showToast(
+                tempConfig.enable
+                  ? Locale.Chat.WebSearch.ConfigSaved
+                  : Locale.Chat.WebSearch.ConfigDisabled,
+              );
+              props.onClose();
+            }}
+          />,
+        ]}
+      >
+        <List>
+          <ListItem
+            title={Locale.Chat.WebSearch.Enable}
+            subTitle={Locale.Chat.WebSearch.EnableSubTitle}
+          >
+            <input
+              type="checkbox"
+              checked={tempConfig.enable}
+              onChange={(e) =>
+                setTempConfig({ ...tempConfig, enable: e.target.checked })
+              }
+            />
+          </ListItem>
+
+          <ListItem
+            title={Locale.Chat.WebSearch.MaxResults}
+            subTitle={Locale.Chat.WebSearch.MaxResultsSubTitle}
+          >
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={tempConfig.maxResults}
+              onChange={(e) =>
+                setTempConfig({
+                  ...tempConfig,
+                  maxResults: Math.max(
+                    1,
+                    Math.min(20, parseInt(e.target.value) || 5),
+                  ),
+                })
+              }
+              style={{ width: "60px" }}
+            />
+          </ListItem>
+
+          <ListItem
+            title={Locale.Chat.WebSearch.SearxngUrl}
+            subTitle={
+              loading
+                ? Locale.Chat.WebSearch.CheckingEnvConfig
+                : envSearxngUrl
+                  ? Locale.Chat.WebSearch.SearxngUrlSubTitleWithEnv(
+                      envSearxngUrl,
+                    )
+                  : Locale.Chat.WebSearch.SearxngUrlSubTitle
+            }
+          >
+            <div style={{ width: "100%" }}>
+              <input
+                type="text"
+                placeholder={
+                  envSearxngUrl
+                    ? Locale.Chat.WebSearch.SearxngUrlPlaceholderWithEnv
+                    : Locale.Chat.WebSearch.SearxngUrlPlaceholder
+                }
+                value={tempConfig.searxngUrl}
+                onChange={(e) =>
+                  setTempConfig({
+                    ...tempConfig,
+                    searxngUrl: e.target.value,
+                  })
+                }
+                style={{
+                  width: "100%",
+                  minWidth: "200px",
+                  marginBottom: "8px",
+                }}
+              />
+              {!envSearxngUrl && (
+                <div style={{ fontSize: "12px", color: "#666" }}>
+                  <span>{Locale.Chat.WebSearch.CommonInstances}</span>
+                  {[
+                    "https://searx.be",
+                    "https://search.sapti.me",
+                    "https://so.ddns-ip.net",
+                  ].map((url, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() =>
+                        setTempConfig({ ...tempConfig, searxngUrl: url })
+                      }
+                      style={{
+                        marginLeft: "4px",
+                        padding: "2px 6px",
+                        fontSize: "11px",
+                        border: "1px solid #ddd",
+                        borderRadius: "3px",
+                        background: "#f5f5f5",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {url.replace("https://", "")}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ListItem>
+
+          <ListItem
+            title={Locale.Chat.WebSearch.AiGenerateKeywords}
+            subTitle={Locale.Chat.WebSearch.AiGenerateKeywordsSubTitle}
+          >
+            <input
+              type="checkbox"
+              checked={tempConfig.aiGenerateKeywords}
+              onChange={(e) =>
+                setTempConfig({
+                  ...tempConfig,
+                  aiGenerateKeywords: e.target.checked,
+                })
+              }
+            />
+          </ListItem>
+
+          <ListItem
+            title={Locale.Chat.WebSearch.DefaultCollapsed}
+            subTitle={Locale.Chat.WebSearch.DefaultCollapsedSubTitle}
+          >
+            <input
+              type="checkbox"
+              checked={tempConfig.defaultCollapsed}
+              onChange={(e) =>
+                setTempConfig({
+                  ...tempConfig,
+                  defaultCollapsed: e.target.checked,
+                })
+              }
+            />
+          </ListItem>
+        </List>
+      </Modal>
     </div>
   );
 }
@@ -1321,29 +1523,162 @@ function Chat() {
     let webSearchContentForAI = ""; // 用于拼接到AI回复开头的搜索结果内容
 
     // 如果启用了网络搜索，执行搜索
-    if (config.enableWebSearch) {
+    if (config.webSearchConfig.enable) {
       // 设置搜索加载状态
       setIsWebSearching(true);
 
       try {
         console.log("🔍 开始网络搜索...");
 
-        // 使用web-search API调用SearXNG
-        const searchUrl = `/api/web-search?q=${encodeURIComponent(
-          originalQuestion,
-        )}`;
-        console.log("📡 使用搜索URL:", searchUrl);
+        // 准备搜索查询
+        let searchQueries = [originalQuestion]; // 默认使用原始问题
 
-        const searchResponse = await fetch(searchUrl);
+        // 如果启用AI生成关键词，生成多个搜索关键词
+        if (config.webSearchConfig.aiGenerateKeywords) {
+          try {
+            console.log("🤖 正在使用AI生成搜索关键词...");
 
-        if (!searchResponse.ok) {
-          throw new Error(
-            `搜索请求失败: ${searchResponse.status} ${searchResponse.statusText}`,
-          );
+            // 使用AI生成搜索关键词
+            const generateAIKeywords = async (
+              question: string,
+            ): Promise<string[]> => {
+              try {
+                // 创建一个临时的AI请求来生成关键词
+                const keywordPrompt = `请为以下问题生成2-3个最佳的搜索关键词，用于在搜索引擎中查找相关信息。
+
+要求：
+1. 每个关键词应该简洁明了，适合搜索引擎
+2. 关键词应该涵盖问题的不同角度
+3. 优先使用核心概念和专业术语
+4. 每行一个关键词，不要编号或其他格式
+5. 最多3个关键词
+
+用户问题：${question}
+
+搜索关键词：`;
+
+                // 使用当前会话的模型配置发送请求
+                const response = await fetch("/api/chat", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    messages: [
+                      {
+                        role: "user",
+                        content: keywordPrompt,
+                      },
+                    ],
+                    model: session.mask.modelConfig.model,
+                    providerName: session.mask.modelConfig.providerName,
+                    stream: false,
+                    // 使用较低的温度以获得更一致的结果
+                    temperature: 0.3,
+                    max_tokens: 200,
+                  }),
+                });
+
+                if (!response.ok) {
+                  throw new Error(`AI请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const aiResponse =
+                  data.choices?.[0]?.message?.content || data.content || "";
+
+                // 解析AI返回的关键词
+                const keywords = aiResponse
+                  .split("\n")
+                  .map((line: string) => line.trim())
+                  .filter(
+                    (line: string) =>
+                      line && !line.includes("：") && !line.includes(":"),
+                  )
+                  .slice(0, 3); // 最多3个关键词
+
+                // 如果AI生成的关键词太少，添加原始问题作为备选
+                if (keywords.length === 0) {
+                  return [question];
+                }
+
+                return keywords;
+              } catch (error) {
+                console.error("AI生成关键词失败:", error);
+                // 如果AI生成失败，使用简单的关键词提取作为备选
+                const words = question
+                  .toLowerCase()
+                  .replace(/[^\w\s\u4e00-\u9fff]/g, " ")
+                  .split(/\s+/)
+                  .filter((word) => word.length > 1);
+
+                if (words.length >= 2) {
+                  return [question, words.slice(0, 3).join(" ")];
+                }
+                return [question];
+              }
+            };
+
+            searchQueries = await generateAIKeywords(originalQuestion);
+            console.log("✅ AI生成的搜索关键词:", searchQueries);
+          } catch (error) {
+            console.error("❌ AI生成关键词失败:", error);
+            // 如果生成失败，继续使用原始问题
+          }
         }
 
-        // 处理搜索结果
-        const searchData = await searchResponse.json();
+        // 批量执行搜索查询
+        let allSearchResults: any[] = [];
+
+        for (const searchQuery of searchQueries) {
+          try {
+            // 使用web-search API调用SearXNG
+            // 为了确保有足够的结果进行去重，每个关键词都获取用户配置的最大数量
+            const searchParams = new URLSearchParams({
+              q: searchQuery,
+              maxResults: config.webSearchConfig.maxResults.toString(),
+            });
+
+            // 如果用户配置了自定义SearXNG URL，添加到参数中
+            if (config.webSearchConfig.searxngUrl) {
+              searchParams.append(
+                "searxngUrl",
+                config.webSearchConfig.searxngUrl,
+              );
+            }
+
+            const searchUrl = `/api/web-search?${searchParams.toString()}`;
+            console.log(`📡 搜索关键词 "${searchQuery}":`, searchUrl);
+
+            const searchResponse = await fetch(searchUrl);
+
+            if (!searchResponse.ok) {
+              console.warn(
+                `搜索关键词 "${searchQuery}" 失败: ${searchResponse.status}`,
+              );
+              continue;
+            }
+
+            // 处理搜索结果
+            const searchData = await searchResponse.json();
+            if (searchData.results && searchData.results.length > 0) {
+              allSearchResults.push(...searchData.results);
+            }
+          } catch (error) {
+            console.warn(`搜索关键词 "${searchQuery}" 出错:`, error);
+            continue;
+          }
+        }
+
+        // 去重并限制结果数量
+        const uniqueResults = allSearchResults
+          .filter(
+            (result, index, self) =>
+              index === self.findIndex((r) => r.link === result.link),
+          )
+          .slice(0, config.webSearchConfig.maxResults);
+
+        const searchData = { results: uniqueResults };
 
         if (searchData.results && searchData.results.length > 0) {
           // 格式化搜索结果为Markdown格式
@@ -1357,10 +1692,20 @@ function Chat() {
             .join("\n");
 
           console.log("✅ 搜索完成，找到", searchData.results.length, "个结果");
+          console.log(
+            "🔍 搜索结果详情:",
+            searchData.results.map((r) => ({ title: r.title, link: r.link })),
+          );
 
           // 准备要拼接到AI回复开头的搜索结果内容
-          webSearchContentForAI = `<details>
-<summary>🔍 网络搜索结果 (${searchData.results.length})</summary>
+          console.log(
+            "🔧 搜索结果配置 - defaultCollapsed:",
+            config.webSearchConfig.defaultCollapsed,
+          );
+          if (config.webSearchConfig.defaultCollapsed) {
+            webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+<details>
+<summary>${Locale.Chat.WebSearch.ResultsTitle(searchData.results.length)}</summary>
 
 ${webSearchResults}
 </details>
@@ -1368,57 +1713,91 @@ ${webSearchResults}
 ---
 
 `;
+            console.log(
+              "📋 生成折叠搜索结果内容:",
+              webSearchContentForAI.length,
+              "字符",
+            );
+          } else {
+            webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+## ${Locale.Chat.WebSearch.ResultsTitle(searchData.results.length)}
 
-          // 简化用户问题，只添加简单的提示让AI基于搜索结果回答
+${webSearchResults}
+
+---
+
+`;
+            console.log(
+              "📋 生成展开搜索结果内容:",
+              webSearchContentForAI.length,
+              "字符",
+            );
+          }
+
+          // 将搜索结果添加到用户问题中，让AI能够看到搜索内容
           finalUserInput = `${originalQuestion}
 
 请基于我提供的网络搜索结果回答这个问题。搜索结果：
 ${webSearchResults}`;
-
-          // 同时准备在用户消息中也显示搜索结果（作为备用方案）
-          const userMessageWithSearch = `${originalQuestion}
-
-${webSearchContentForAI}请基于上述搜索结果回答问题。`;
-
-          // 如果需要显示在用户消息中作为备用，可以使用这个版本
-          // finalUserInput = userMessageWithSearch;
-
-          // 临时启用备用方案：将搜索结果显示在用户消息中
-          finalUserInput = userMessageWithSearch;
         } else {
           webSearchResults = "未找到相关搜索结果。";
           console.log("⚠️ 未找到搜索结果");
 
           // 准备要拼接到AI回复开头的无结果内容
-          webSearchContentForAI = `<details>
-<summary>🔍 网络搜索结果</summary>
+          if (config.webSearchConfig.defaultCollapsed) {
+            webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+<details>
+<summary>${Locale.Chat.WebSearch.ResultsTitle(0)}</summary>
 
-未找到相关网络信息，以下回答基于AI已有知识。
+${Locale.Chat.WebSearch.NoResults}
 </details>
+
+---
+
+`;
+          } else {
+            webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+## ${Locale.Chat.WebSearch.ResultsTitle(0)}
+
+${Locale.Chat.WebSearch.NoResults}
+
+---
+
+`;
+          }
+        }
+      } catch (error) {
+        console.error("❌ 网络搜索失败:", error);
+        // 搜索出错也添加一个提示到AI回复中
+        if (config.webSearchConfig.defaultCollapsed) {
+          webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+<details>
+<summary>${Locale.Chat.WebSearch.SearchFailed}</summary>
+
+${Locale.Chat.WebSearch.SearchError(error instanceof Error ? error.message : String(error))}
+${Locale.Chat.WebSearch.NoResults}
+</details>
+
+---
+
+`;
+        } else {
+          webSearchContentForAI = `<!-- SEARCH_RESULTS_MARKER -->
+## ${Locale.Chat.WebSearch.SearchFailed}
+
+${Locale.Chat.WebSearch.SearchError(error instanceof Error ? error.message : String(error))}
+${Locale.Chat.WebSearch.NoResults}
 
 ---
 
 `;
         }
-      } catch (error) {
-        console.error("❌ 网络搜索失败:", error);
-        // 搜索出错也添加一个提示到AI回复中
-        webSearchContentForAI = `<details>
-<summary>🔍 网络搜索失败</summary>
-
-搜索过程中发生错误: ${error instanceof Error ? error.message : String(error)}
-以下回答基于AI已有知识。
-</details>
-
----
-
-`;
 
         // 显示错误提示
         showToast(
-          `网络搜索失败: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          Locale.Chat.WebSearch.SearchError(
+            error instanceof Error ? error.message : String(error),
+          ),
         );
       } finally {
         // 搜索完成，清除加载状态
@@ -1428,81 +1807,152 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
     // 发送消息
     const messagePromise = chatStore.onUserInput(finalUserInput, attachImages);
+    console.log("📤 消息已发送，获得Promise:", !!messagePromise);
 
     // 如果有搜索结果需要拼接，等待AI回复开始后进行拼接
-    if (config.enableWebSearch && webSearchContentForAI) {
+    console.log("🔍 检查是否需要添加搜索结果:", {
+      searchEnabled: config.webSearchConfig.enable,
+      hasSearchContent: !!webSearchContentForAI,
+      searchContentLength: webSearchContentForAI.length,
+      searchContentPreview: webSearchContentForAI.substring(0, 200) + "...",
+    });
+    if (config.webSearchConfig.enable && webSearchContentForAI) {
+      console.log("🚀 开始设置搜索结果添加回调...");
+
+      // 不依赖 messagePromise.then()，直接开始监听消息变化
+      console.log("✅ 直接开始监听AI回复...");
+
+      // 使用定时器等待AI消息创建并完成流式输出
+      let retryCount = 0;
+      const maxRetries = 100; // 增加到100次重试，最多50秒
+      const checkInterval = 500; // 增加检查间隔到500ms
+
+      const addSearchResults = () => {
+        const currentSession = chatStore.currentSession();
+        const messages = currentSession.messages;
+        const lastMessage = messages[messages.length - 1];
+
+        console.log(`尝试添加搜索结果 (${retryCount + 1}/${maxRetries})`, {
+          hasLastMessage: !!lastMessage,
+          messageRole: lastMessage?.role,
+          messageContentType: typeof lastMessage?.content,
+          isStreaming: lastMessage?.streaming, // 添加流式状态信息
+          hasSearchResults:
+            typeof lastMessage?.content === "string"
+              ? lastMessage.content.includes("SEARCH_RESULTS_MARKER")
+              : false,
+          messageLength:
+            typeof lastMessage?.content === "string"
+              ? lastMessage.content.length
+              : 0,
+          messageContentPreview:
+            typeof lastMessage?.content === "string"
+              ? lastMessage.content.substring(0, 100) + "..."
+              : "非字符串内容",
+          totalMessages: messages.length,
+          messageIndex: messages.length - 1,
+        });
+
+        // 详细检查每个条件
+        const hasMessage = !!lastMessage;
+        const isAssistant = lastMessage?.role === "assistant";
+        const isString = typeof lastMessage?.content === "string";
+        const hasNoMarker =
+          typeof lastMessage?.content === "string"
+            ? !lastMessage.content.includes("SEARCH_RESULTS_MARKER")
+            : false;
+        const isNotStreaming = !lastMessage?.streaming; // 新增：检查是否还在流式输出
+
+        console.log("🔍 条件检查详情:", {
+          hasMessage,
+          isAssistant,
+          isString,
+          hasNoMarker,
+          isNotStreaming,
+          allConditionsMet:
+            hasMessage &&
+            isAssistant &&
+            isString &&
+            hasNoMarker &&
+            isNotStreaming,
+        });
+
+        if (
+          hasMessage &&
+          isAssistant &&
+          isString &&
+          hasNoMarker &&
+          isNotStreaming
+        ) {
+          console.log("✅ 检测到AI消息，正在添加搜索结果");
+
+          // 拼接搜索结果到AI消息开头
+          chatStore.updateTargetSession(currentSession, (targetSession) => {
+            const msgIndex = targetSession.messages.length - 1;
+            if (
+              msgIndex >= 0 &&
+              targetSession.messages[msgIndex].role === "assistant" &&
+              typeof targetSession.messages[msgIndex].content === "string"
+            ) {
+              const originalContent = targetSession.messages[msgIndex].content;
+              targetSession.messages[msgIndex].content =
+                webSearchContentForAI + originalContent;
+
+              console.log("✅ 搜索结果已成功添加到消息", {
+                originalLength: originalContent.length,
+                newLength: targetSession.messages[msgIndex].content.length,
+                contentPreview:
+                  targetSession.messages[msgIndex].content.substring(0, 300) +
+                  "...",
+              });
+            }
+          });
+
+          return; // 成功添加，停止重试
+        }
+
+        retryCount++;
+        if (retryCount < maxRetries) {
+          // 如果AI消息还未创建，继续等待
+          setTimeout(addSearchResults, checkInterval);
+        } else {
+          console.warn("❌ 添加搜索结果超时，停止重试");
+          // 输出最终状态用于调试
+          const finalSession = chatStore.currentSession();
+          const finalMessages = finalSession.messages;
+          const finalLastMessage = finalMessages[finalMessages.length - 1];
+          console.warn("❌ 最终状态:", {
+            totalMessages: finalMessages.length,
+            lastMessageRole: finalLastMessage?.role,
+            lastMessageContentType: typeof finalLastMessage?.content,
+            lastMessageLength:
+              typeof finalLastMessage?.content === "string"
+                ? finalLastMessage.content.length
+                : 0,
+            lastMessagePreview:
+              typeof finalLastMessage?.content === "string"
+                ? finalLastMessage.content.substring(0, 100) + "..."
+                : "非字符串内容",
+          });
+        }
+      };
+
+      // 开始监听，给AI消息创建更多时间
+      setTimeout(addSearchResults, 1000);
+
+      // 保留原来的 Promise 处理，以防将来需要
       messagePromise
         .then(() => {
+          console.log("✅ messagePromise.then() 回调被执行!");
           console.log("消息发送完成，开始监听AI回复...");
-
-          // 使用定时器等待AI消息创建
-          let retryCount = 0;
-          const maxRetries = 50; // 最多重试50次，即10秒
-
-          const addSearchResults = () => {
-            const currentSession = chatStore.currentSession();
-            const messages = currentSession.messages;
-            const lastMessage = messages[messages.length - 1];
-
-            console.log(`尝试添加搜索结果 (${retryCount + 1}/${maxRetries})`, {
-              hasLastMessage: !!lastMessage,
-              messageRole: lastMessage?.role,
-              messageContentType: typeof lastMessage?.content,
-              hasSearchResults:
-                typeof lastMessage?.content === "string"
-                  ? lastMessage.content.includes("🔍 网络搜索结果")
-                  : false,
-              messageLength:
-                typeof lastMessage?.content === "string"
-                  ? lastMessage.content.length
-                  : 0,
-            });
-
-            if (
-              lastMessage &&
-              lastMessage.role === "assistant" &&
-              typeof lastMessage.content === "string" &&
-              !lastMessage.content.includes("🔍 网络搜索结果")
-            ) {
-              console.log("✅ 检测到AI消息，正在添加搜索结果");
-
-              // 拼接搜索结果到AI消息开头
-              chatStore.updateTargetSession(currentSession, (targetSession) => {
-                const msgIndex = targetSession.messages.length - 1;
-                if (
-                  msgIndex >= 0 &&
-                  targetSession.messages[msgIndex].role === "assistant" &&
-                  typeof targetSession.messages[msgIndex].content === "string"
-                ) {
-                  const originalContent =
-                    targetSession.messages[msgIndex].content;
-                  targetSession.messages[msgIndex].content =
-                    webSearchContentForAI + originalContent;
-
-                  console.log("✅ 搜索结果已成功添加到消息", {
-                    originalLength: originalContent.length,
-                    newLength: targetSession.messages[msgIndex].content.length,
-                  });
-                }
-              });
-
-              return; // 成功添加，停止重试
-            }
-
-            retryCount++;
-            if (retryCount < maxRetries) {
-              // 如果AI消息还未创建，继续等待
-              setTimeout(addSearchResults, 200);
-            } else {
-              console.warn("❌ 添加搜索结果超时，停止重试");
-            }
-          };
-
-          // 开始监听，稍微延迟以确保消息已经添加
-          setTimeout(addSearchResults, 300);
         })
         .catch((error) => {
-          console.error("❌ 发送消息失败:", error);
+          console.error("❌ messagePromise 被拒绝:", error);
+          console.error("❌ 错误类型:", typeof error);
+          console.error(
+            "❌ 错误详情:",
+            error?.message || error?.toString() || "未知错误",
+          );
         });
     }
 
@@ -1589,9 +2039,18 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
   };
   const onRightClick = (e: any, message: ChatMessage) => {
     // copy to clipboard
-    if (selectOrCopy(e.currentTarget, getMessageTextContent(message))) {
+    const contentToCopy =
+      message.role === "user"
+        ? getMessageTextContentForDisplay(message)
+        : getMessageTextContent(message);
+
+    if (selectOrCopy(e.currentTarget, contentToCopy)) {
       if (userInput.length === 0) {
-        setUserInput(getMessageTextContent(message));
+        const contentToFill =
+          message.role === "user"
+            ? getMessageTextContentForDisplay(message)
+            : getMessageTextContent(message);
+        setUserInput(contentToFill);
       }
 
       e.preventDefault();
@@ -1660,7 +2119,10 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
     // resend the message
     setIsLoading(true);
-    const textContent = getMessageTextContent(userMessage);
+    const textContent =
+      userMessage.role === "user"
+        ? getMessageTextContentForDisplay(userMessage)
+        : getMessageTextContent(userMessage);
     const images = getMessageImages(userMessage);
     chatStore.onUserInput(textContent, images).then(() => setIsLoading(false));
     // 只在非移动设备上聚焦输入框
@@ -1907,7 +2369,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
       if (imageFiles.length > 0) {
         // 检查图片数量限制
         if (attachImages.length >= 3) {
-          showToast("最多只能上传3张图片");
+          showToast(Locale.Chat.Upload.MaxImagesReached);
           return;
         }
 
@@ -1935,7 +2397,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
       if (textFiles.length > 0) {
         // 检查文件数量限制
         if (attachedFiles.length >= 5) {
-          showToast("最多只能上传5个文件");
+          showToast(Locale.Chat.Upload.MaxFilesReached);
           return;
         }
 
@@ -1949,7 +2411,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
               const truncatedText =
                 text.length > maxLength
                   ? text.substring(0, maxLength) +
-                    `\n\n[文件过大，已截断。原文件大小: ${text.length} 字符]`
+                    `\n\n[${Locale.Chat.Upload.FilesTooLarge}。原文件大小: ${text.length} 字符]`
                   : text;
 
               // 添加到附件列表
@@ -1969,7 +2431,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
           }
         } catch (error) {
           console.error("读取文件失败:", error);
-          showToast("读取文件失败");
+          showToast(Locale.Chat.Upload.ReadFileFailed);
         } finally {
           setUploading(false);
         }
@@ -1983,7 +2445,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
         // 检查文件数量限制
         if (attachedFiles.length >= 5) {
-          showToast("最多只能上传5个文件");
+          showToast(Locale.Chat.Upload.MaxFilesReached);
           return;
         }
 
@@ -1992,7 +2454,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
         const truncatedText =
           text.length > maxLength
             ? text.substring(0, maxLength) +
-              `\n\n[文件过大，已截断。原文件大小: ${text.length} 字符]`
+              `\n\n[${Locale.Chat.Upload.FilesTooLarge}。原文件大小: ${text.length} 字符]`
             : text;
 
         // 将长文本转为文件附件
@@ -2008,7 +2470,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
           },
         ]);
 
-        showToast("已将长文本转为附件");
+        showToast(Locale.Chat.Upload.PasteAsAttachment);
       }
     }
   };
@@ -2062,9 +2524,9 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
           if (updatedFiles.length > 5) {
             actualFileCount = Math.max(0, 5 - attachedFiles.length);
             updatedFiles.splice(5, updatedFiles.length - 5);
-            messages.push(`最多只能上传5个文件，已保留前5个`);
+            messages.push(Locale.Chat.Upload.MaxFilesReached + "，已保留前5个");
           } else if (actualFileCount > 0) {
-            messages.push(`已上传 ${actualFileCount} 个文件`);
+            messages.push(Locale.Chat.Upload.FilesUploaded(actualFileCount));
           }
           setAttachedFiles(updatedFiles);
         }
@@ -2080,9 +2542,11 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
           if (images.length > 3) {
             actualImageCount = Math.max(0, 3 - attachImages.length);
             images.splice(3, images.length - 3);
-            messages.push(`最多只能上传3张图片，已保留前3张`);
+            messages.push(
+              Locale.Chat.Upload.MaxImagesReached + "，已保留前3张",
+            );
           } else if (actualImageCount > 0) {
-            messages.push(`已上传 ${actualImageCount} 张图片`);
+            messages.push(Locale.Chat.Upload.ImagesUploaded(actualImageCount));
           }
           setAttachImages(images);
         }
@@ -2094,7 +2558,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
       },
       // 上传失败
       (error) => {
-        showToast("读取文件失败");
+        showToast(Locale.Chat.Upload.ReadFileFailed);
       },
       // 完成上传
       () => {
@@ -2105,6 +2569,10 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
   // 快捷键 shortcut keys
   const [showShortcutKeyModal, setShowShortcutKeyModal] = useState(false);
+
+  // 网络搜索配置弹窗
+  const [showWebSearchConfigModal, setShowWebSearchConfigModal] =
+    useState(false);
 
   useEffect(() => {
     const handleKeyDown = (event: any) => {
@@ -2145,11 +2613,12 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
         event.key.toLowerCase() === "c"
       ) {
         event.preventDefault();
-        const lastNonUserMessage = messages
-          .filter((message) => message.role !== "user")
-          .pop();
-        if (lastNonUserMessage) {
-          const lastMessageContent = getMessageTextContent(lastNonUserMessage);
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage) {
+          const lastMessageContent =
+            lastMessage.role === "user"
+              ? getMessageTextContentForDisplay(lastMessage)
+              : getMessageTextContent(lastMessage);
           copyToClipboard(lastMessageContent);
         }
       }
@@ -2395,7 +2864,9 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                               onClick={async () => {
                                 const newMessage = await showPrompt(
                                   Locale.Chat.Actions.Edit,
-                                  getMessageTextContent(message),
+                                  message.role === "user"
+                                    ? getMessageTextContentForDisplay(message)
+                                    : getMessageTextContent(message),
                                   10,
                                 );
                                 let newContent: string | MultimodalContent[] =
@@ -2437,7 +2908,11 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                                   onClick={async () => {
                                     const newMessage = await showPrompt(
                                       Locale.Chat.Actions.Edit,
-                                      getMessageTextContent(message),
+                                      message.role === "user"
+                                        ? getMessageTextContentForDisplay(
+                                            message,
+                                          )
+                                        : getMessageTextContent(message),
                                       10,
                                     );
                                     let newContent:
@@ -2499,7 +2974,11 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                       <div className={styles["chat-message-item"]}>
                         <Markdown
                           key={message.streaming ? "loading" : "done"}
-                          content={getMessageTextContent(message)}
+                          content={
+                            isUser
+                              ? getMessageTextContentForDisplay(message)
+                              : getMessageTextContent(message)
+                          }
                           loading={
                             (message.preview || message.streaming) &&
                             message.content.length === 0 &&
@@ -2582,7 +3061,9 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                                 icon={<CopyIcon />}
                                 onClick={() =>
                                   copyToClipboard(
-                                    getMessageTextContent(message),
+                                    message.role === "user"
+                                      ? getMessageTextContentForDisplay(message)
+                                      : getMessageTextContent(message),
                                   )
                                 }
                               />
@@ -2601,7 +3082,13 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
                                     )
                                   }
                                   onClick={() =>
-                                    openaiSpeech(getMessageTextContent(message))
+                                    openaiSpeech(
+                                      message.role === "user"
+                                        ? getMessageTextContentForDisplay(
+                                            message,
+                                          )
+                                        : getMessageTextContent(message),
+                                    )
                                   }
                                 />
                               )}
@@ -2646,7 +3133,8 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
               setShowChatSidePanel={setShowChatSidePanel}
               // 新增显示MCP工具面板的函数
               showMcpToolPanel={() => setShowMcpToolPanel(true)}
-              // 移除不再需要的网络搜索props，现在在ChatActions内部使用全局配置
+              // 新增显示网络搜索配置弹窗的函数
+              showWebSearchConfig={() => setShowWebSearchConfigModal(true)}
             />
 
             {/* 显示MCP工具面板 */}
@@ -2668,7 +3156,7 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
               {isWebSearching && (
                 <div className={styles["web-search-loading"]}>
                   <LoadingIcon />
-                  <span>🔍 正在搜索网络获取相关信息...</span>
+                  <span>{Locale.Chat.WebSearch.Searching}</span>
                 </div>
               )}
 
@@ -2828,6 +3316,12 @@ ${webSearchContentForAI}请基于上述搜索结果回答问题。`;
 
       {showShortcutKeyModal && (
         <ShortcutKeyModal onClose={() => setShowShortcutKeyModal(false)} />
+      )}
+
+      {showWebSearchConfigModal && (
+        <WebSearchConfigModal
+          onClose={() => setShowWebSearchConfigModal(false)}
+        />
       )}
 
       {showFileEditModal && editingFile && (
@@ -3000,10 +3494,14 @@ function McpToolPanel(props: {
     return (
       <div className={styles["mcp-tool-panel"]}>
         <div className={styles["mcp-tool-panel-header"]}>
-          <div className={styles["mcp-tool-panel-title"]}>MCP工具</div>
+          <div className={styles["mcp-tool-panel-title"]}>
+            {Locale.Chat.McpTools.Title}
+          </div>
           <IconButton icon={<CloseIcon />} onClick={props.onClose} />
         </div>
-        <div className={styles["mcp-tool-panel-loading"]}>加载中...</div>
+        <div className={styles["mcp-tool-panel-loading"]}>
+          {Locale.Chat.McpTools.Loading}
+        </div>
       </div>
     );
   }
@@ -3011,16 +3509,18 @@ function McpToolPanel(props: {
   return (
     <div className={styles["mcp-tool-panel"]}>
       <div className={styles["mcp-tool-panel-header"]}>
-        <div className={styles["mcp-tool-panel-title"]}>MCP工具</div>
+        <div className={styles["mcp-tool-panel-title"]}>
+          {Locale.Chat.McpTools.Title}
+        </div>
         <IconButton icon={<CloseIcon />} onClick={props.onClose} />
       </div>
       <div className={styles["mcp-tool-panel-content"]}>
         {tools.length === 0 ? (
           <div className={styles["mcp-tool-panel-empty"]}>
-            <p>没有可用的MCP工具</p>
+            <p>{Locale.Chat.McpTools.NoTools}</p>
             <p>
               <a onClick={() => navigate(Path.McpMarket)}>
-                点击这里添加MCP服务器
+                {Locale.Chat.McpTools.AddServers}
               </a>
             </p>
           </div>

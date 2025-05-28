@@ -1525,8 +1525,8 @@ export function Settings() {
               checkingUpdate
                 ? Locale.Settings.Update.IsChecking
                 : hasNewVersion
-                ? Locale.Settings.Update.FoundUpdate(remoteId ?? "ERROR")
-                : Locale.Settings.Update.IsLatest
+                  ? Locale.Settings.Update.FoundUpdate(remoteId ?? "ERROR")
+                  : Locale.Settings.Update.IsLatest
             }
           >
             {checkingUpdate ? (
@@ -1791,17 +1791,18 @@ export function Settings() {
           </ListItem>
 
           <ListItem
-            title="启用网络搜索"
-            subTitle="启用后可以在聊天中使用网络搜索功能，提供实时信息"
+            title={Locale.Chat.WebSearch.Enable}
+            subTitle={Locale.Chat.WebSearch.EnableSubTitle}
           >
             <input
               type="checkbox"
-              checked={config.enableWebSearch}
+              checked={config.webSearchConfig.enable}
               onChange={(e) =>
-                updateConfig(
-                  (config) =>
-                    (config.enableWebSearch = e.currentTarget.checked),
-                )
+                updateConfig((config) => {
+                  config.webSearchConfig.enable = e.currentTarget.checked;
+                  // 同步更新旧的enableWebSearch字段以保持兼容性
+                  config.enableWebSearch = e.currentTarget.checked;
+                })
               }
             />
           </ListItem>

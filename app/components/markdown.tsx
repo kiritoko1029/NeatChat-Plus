@@ -23,7 +23,7 @@ import { FileAttachment } from "./file-attachment";
 import { encode } from "../utils/token";
 
 function Details(props: { children: React.ReactNode }) {
-  return <details open>{props.children}</details>;
+  return <details>{props.children}</details>;
 }
 function Summary(props: { children: React.ReactNode }) {
   return <summary>{props.children}</summary>;
@@ -622,7 +622,7 @@ function MarkDownContentComponent(props: { content: string }) {
 
           // 处理其他安全链接
           const isInternal = /^\/#/i.test(href);
-          const target = isInternal ? "_self" : aProps.target ?? "_blank";
+          const target = isInternal ? "_self" : (aProps.target ?? "_blank");
           const rel = !isInternal ? "noopener noreferrer" : undefined;
 
           return <a {...aProps} href={href} target={target} rel={rel} />;

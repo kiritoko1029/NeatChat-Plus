@@ -132,7 +132,6 @@ html {
 }
 
 body {
-  background-color: var(--gray);
   color: var(--black);
   margin: 0;
   padding: 0;
@@ -145,8 +144,61 @@ body {
   touch-action: pan-x pan-y;
   overflow: hidden;
 
+  // 亮色模式背景 - 使用背景图片
+  &.light {
+    background-color: var(--gray);
+    background-image: url('/bg.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  // 暗色模式背景 - 只使用纯色背景
+  &.dark {
+    background-color: var(--gray);
+  }
+
+  // 默认背景（亮色模式）
+  background-color: var(--gray);
+  background-image: url('/bg.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+
   @media only screen and (max-width: 600px) {
+    &.light {
+      background-color: var(--second);
+      background-image: url('/bg.webp');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+
+    &.dark {
+      background-color: var(--second);
+    }
+
+    // 默认移动端背景
     background-color: var(--second);
+    background-image: url('/bg.webp');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  // 根据系统偏好设置暗色模式背景
+  @media (prefers-color-scheme: dark) {
+    background-color: var(--gray);
+    background-image: none;
+    
+    @media only screen and (max-width: 600px) {
+      background-color: var(--second);
+      background-image: none;
+    }
   }
 
   *:focus-visible {

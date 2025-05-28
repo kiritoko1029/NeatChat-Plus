@@ -255,6 +255,25 @@ export function getMessageTextContentWithoutThinking(message: RequestMessage) {
   return content.replace(pattern, "").trim(); // 直接移除匹配的部分
 }
 
+export function getMessageTextContentForDisplay(message: RequestMessage) {
+  let content = getMessageTextContent(message);
+
+  // 如果是用户消息并且包含搜索结果，则过滤掉搜索结果部分
+  if (
+    message.role === "user" &&
+    content.includes("请基于我提供的网络搜索结果回答这个问题。搜索结果：")
+  ) {
+    // 提取原始问题部分（搜索结果之前的内容）
+    const searchMarker = "请基于我提供的网络搜索结果回答这个问题。搜索结果：";
+    const searchIndex = content.indexOf(searchMarker);
+    if (searchIndex > 0) {
+      return content.substring(0, searchIndex).trim();
+    }
+  }
+
+  return content;
+}
+
 export function getMessageImages(message: RequestMessage): string[] {
   if (typeof message.content === "string") {
     return [];

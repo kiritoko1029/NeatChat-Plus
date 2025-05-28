@@ -58,6 +58,14 @@ export type ModelConfig = {
   style: DalleStyle;
 };
 
+export type WebSearchConfig = {
+  enable: boolean;
+  maxResults: number;
+  aiGenerateKeywords: boolean;
+  defaultCollapsed: boolean;
+  searxngUrl: string;
+};
+
 export type AppConfig = {
   lastUpdate: number;
   submitKey: SubmitKey;
@@ -81,13 +89,14 @@ export type AppConfig = {
   modelConfig: ModelConfig;
   ttsConfig: TTSConfig;
   realtimeConfig: RealtimeConfig;
+  webSearchConfig: WebSearchConfig;
   enableModelSearch: boolean;
   enableThemeChange: boolean;
   enablePromptHints: boolean;
   enableClearContext: boolean;
   enablePlugins: boolean;
   enableShortcuts: boolean;
-  enableWebSearch: boolean;
+  enableWebSearch: boolean; // 保持向后兼容
 };
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -148,6 +157,13 @@ export const DEFAULT_CONFIG: AppConfig = {
     },
     temperature: 0.9,
     voice: "alloy" as Voice,
+  },
+  webSearchConfig: {
+    enable: false,
+    maxResults: 5,
+    aiGenerateKeywords: false,
+    defaultCollapsed: true,
+    searxngUrl: "",
   },
   enableModelSearch: false,
   enableThemeChange: false,
@@ -265,7 +281,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.1,
+    version: 4.2,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -315,7 +331,7 @@ export const useAppConfig = createPersistStore(
         state.modelConfig.template =
           state.modelConfig.template !== DEFAULT_INPUT_TEMPLATE
             ? state.modelConfig.template
-            : config?.template ?? DEFAULT_INPUT_TEMPLATE;
+            : (config?.template ?? DEFAULT_INPUT_TEMPLATE);
       }
 
       if (version < 4.1) {
@@ -323,6 +339,17 @@ export const useAppConfig = createPersistStore(
           DEFAULT_CONFIG.modelConfig.compressModel;
         state.modelConfig.compressProviderName =
           DEFAULT_CONFIG.modelConfig.compressProviderName;
+      }
+
+      if (version < 4.2) {
+        // 迁移网络搜索配置
+        state.webSearchConfig = {
+          enable: (state as any).enableWebSearch || false,
+          maxResults: 5,
+          aiGenerateKeywords: false,
+          defaultCollapsed: true,
+          searxngUrl: "",
+        };
       }
 
       return state as any;

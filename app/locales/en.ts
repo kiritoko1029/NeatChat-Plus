@@ -76,6 +76,7 @@ const en: LocaleType = {
       Clear: "Clear Context",
       Settings: "Settings",
       UploadImage: "Upload Images",
+      UploadAttachment: "Upload Attachment",
       Search: "Web Search",
     },
     Rename: "Rename Chat",
@@ -103,6 +104,58 @@ const en: LocaleType = {
       copyLastMessage: "Copy Last Reply",
       copyLastCode: "Copy Last Code Block",
       showShortcutKey: "Show Shortcuts",
+    },
+    WebSearch: {
+      ConfigTitle: "Web Search Configuration",
+      Enable: "Enable Web Search",
+      EnableSubTitle:
+        "Enable web search functionality to provide real-time information in chat",
+      MaxResults: "Maximum Search Results",
+      MaxResultsSubTitle:
+        "Maximum number of search results returned per query (1-20)",
+      SearxngUrl: "SearXNG Service URL",
+      SearxngUrlSubTitle:
+        "Custom SearXNG instance URL, leave empty to use environment variable",
+      SearxngUrlSubTitleWithEnv: (url: string) =>
+        `Environment variable configured: ${url}`,
+      SearxngUrlPlaceholder: "https://searx.example.com",
+      SearxngUrlPlaceholderWithEnv: "Leave empty to use environment variable",
+      AiGenerateKeywords: "AI Generate Search Keywords",
+      AiGenerateKeywordsSubTitle:
+        "Let AI automatically generate more precise search keywords based on user questions",
+      DefaultCollapsed: "Default Collapsed Search Results",
+      DefaultCollapsedSubTitle:
+        "Display search results collapsed by default in AI replies, users can click to expand",
+      ConfigSaved: "Web search configuration saved",
+      ConfigDisabled: "Web search disabled",
+      Enabled: "Web Search (Enabled)",
+      Searching: "🔍 Searching the web for relevant information...",
+      ResultsTitle: (count: number) => `🔍 Web Search Results (${count})`,
+      NoResults:
+        "No relevant web information found, the following answer is based on AI's existing knowledge.",
+      SearchFailed: "🔍 Web Search Failed",
+      SearchError: (error: string) => `Error occurred during search: ${error}`,
+      CommonInstances: "Common public instances:",
+      CheckingEnvConfig: "Checking environment configuration...",
+    },
+    Upload: {
+      FilesUploaded: (count: number) => `Uploaded ${count} files`,
+      ImagesUploaded: (count: number) => `Uploaded ${count} images`,
+      MaxFilesReached: "Maximum 5 files allowed",
+      MaxImagesReached: "Maximum 3 images allowed",
+      FilesTooLarge: "File too large, truncated",
+      TextTooLong: "Text too long, converted to file attachment",
+      ReadFileFailed: "Failed to read file",
+      UploadFailed: "Upload failed",
+      PasteAsAttachment: "Long text converted to attachment",
+    },
+    McpTools: {
+      Title: "MCP Tools",
+      Loading: "Loading...",
+      NoTools: "No MCP tools available",
+      AddServers: "Click here to add MCP servers",
+      ToolCount: (count: number) =>
+        `MCP Tools${count > 0 ? ` (${count})` : ""}`,
     },
     TokenInfo: {
       TokenCount: (count: number) => `${count} Tokens`,

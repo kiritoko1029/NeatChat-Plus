@@ -13,41 +13,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // 获取查询参数
-  const { q } = req.query;
+  const { q, maxResults, searxngUrl } = req.query;
   
   if (!q || typeof q !== 'string') {
     return res.status(400).json({ error: 'Missing search query parameter' });
   }
+
+  // 解析最大结果数量，默认为5，最大为20
+  const maxResultsNum = Math.min(20, Math.max(1, parseInt(maxResults as string) || 5));
   
   try {
-    // 获取SearXNG URL
-    const searxngUrl = process.env.SEARXNG_URL;
+    // 获取SearXNG URL - 优先使用用户配置的URL，然后是环境变量
+    const finalSearxngUrl = (searxngUrl as string) || process.env.SEARXNG_URL;
     
-    if (!searxngUrl) {
-      // 如果未配置SearXNG URL，使用模拟数据（用于开发测试）
+    if (!finalSearxngUrl) {
+      // 如果未配置SearXNG URL，返回配置提示
       return res.status(200).json({
         results: [
           {
-            title: "模拟搜索结果 1",
-            snippet: "这是一个模拟的搜索结果描述。由于未配置SearXNG URL，系统返回了模拟数据。",
-            link: "https://example.com/result1"
-          },
-          {
-            title: "模拟搜索结果 2",
-            snippet: "这是另一个模拟的搜索结果。这些结果仅用于测试目的，实际部署时需配置SEARXNG_URL环境变量。",
-            link: "https://example.com/result2"
-          },
-          {
-            title: "关于SearXNG配置",
-            snippet: "要启用真实搜索功能，请在环境变量中设置SEARXNG_URL，指向您的SearXNG实例地址。",
+            title: "⚠️ 网络搜索功能未配置",
+            snippet: "要使用网络搜索功能，请配置SearXNG服务地址。您可以：\n1. 在网络搜索配置中设置自定义SearXNG URL\n2. 或在环境变量中设置 SEARXNG_URL",
             link: "https://github.com/searxng/searxng"
+          },
+          {
+            title: "🔧 如何配置SearXNG",
+            snippet: "SearXNG是一个免费的开源搜索引擎聚合器。您可以：\n• 使用公共实例（如 https://searx.be）\n• 自建SearXNG实例\n• 使用Docker快速部署",
+            link: "https://docs.searxng.org/"
+          },
+          {
+            title: "🌐 公共SearXNG实例",
+            snippet: "您可以使用以下公共实例之一：\n• https://searx.be\n• https://search.sapti.me\n• https://searx.tiekoetter.com\n注意：公共实例可能有使用限制",
+            link: "https://searx.space/"
           }
         ]
       });
     }
     
     // 构建SearXNG搜索URL
-    const searchUrl = `${searxngUrl}/search?q=${encodeURIComponent(q)}&format=json&language=zh`;
+    const searchUrl = `${finalSearxngUrl}/search?q=${encodeURIComponent(q)}&format=json&language=zh`;
     console.log("使用SearXNG搜索URL:", searchUrl);
     
     // 发送请求
@@ -61,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const data = await response.json();
     
     // 格式化结果 - SearXNG返回的结果结构与Google不同
-    const results = data.results?.slice(0, 10).map((item: any) => ({
+    const results = data.results?.slice(0, maxResultsNum).map((item: any) => ({
       title: item.title,
       snippet: item.content || item.snippet || "",
       link: item.url
