@@ -1902,8 +1902,11 @@ ${Locale.Chat.WebSearch.NoResults}
                 originalLength: originalContent.length,
                 newLength: targetSession.messages[msgIndex].content.length,
                 contentPreview:
-                  targetSession.messages[msgIndex].content.substring(0, 300) +
-                  "...",
+                  typeof targetSession.messages[msgIndex].content === "string"
+                    ? (
+                        targetSession.messages[msgIndex].content as string
+                      ).substring(0, 300) + "..."
+                    : "非字符串内容",
               });
             }
           });
@@ -1931,7 +1934,7 @@ ${Locale.Chat.WebSearch.NoResults}
                 : 0,
             lastMessagePreview:
               typeof finalLastMessage?.content === "string"
-                ? finalLastMessage.content.substring(0, 100) + "..."
+                ? (finalLastMessage.content as string).substring(0, 100) + "..."
                 : "非字符串内容",
           });
         }

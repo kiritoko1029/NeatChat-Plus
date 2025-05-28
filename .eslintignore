@@ -1,2 +1,5 @@
 public/serviceWorker.js
 app/mcp/mcp_config.json
+**/*.scss
+**/*.sass
+**/*.css
