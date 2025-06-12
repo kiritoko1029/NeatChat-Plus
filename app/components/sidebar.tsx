@@ -272,7 +272,7 @@ export function SideBar(props: { className?: string }) {
   const [sideBarTitle, setSideBarTitle] = useState(
     serverConfig.sideBarTitle || "NeatChat",
   );
-  const [sideBarSubTitle, setSideBarSubTitle] = useState(
+  const [sideBarSubTitle, setSideBarSubTitle] = useState<React.ReactNode>(
     "A Better AI assistant.",
   );
   const [hitokotoUrl, setHitokotoUrl] = useState(
@@ -296,6 +296,48 @@ export function SideBar(props: { className?: string }) {
     return <NeatIcon width={44} height={44} />;
   };
 
+  // 检查是否是有效的URL
+  const isValidUrl = (url: string) => {
+    try {
+      new URL(url);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // 解析文本中的URL并转换为可点击的链接
+  const parseTextWithUrls = (text: string): React.ReactNode => {
+    // URL 正则表达式
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+      // 检查是否是URL
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: "var(--primary)",
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+            onClick={(e) => {
+              e.stopPropagation(); // 防止触发父元素的点击事件
+            }}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   // 获取一言的函数
   const fetchHitokoto = (url: string) => {
     // 检查是否是URL格式
@@ -314,7 +356,9 @@ export function SideBar(props: { className?: string }) {
                 hitokotoText += `「${data.from_who}」`;
               }
             }
-            setSideBarSubTitle(hitokotoText);
+            // 解析文本中的URL并转换为可点击的链接
+            const parsedSubTitle = parseTextWithUrls(hitokotoText);
+            setSideBarSubTitle(parsedSubTitle);
             console.log("[SideBar] Hitokoto:", hitokotoText);
           }
         })
@@ -322,9 +366,10 @@ export function SideBar(props: { className?: string }) {
           console.error("[SideBar] Failed to fetch hitokoto:", err);
         });
     } catch (e) {
-      // 不是URL格式，直接将内容设置为副标题
+      // 不是URL格式，解析文本中的URL并转换为可点击的链接
       console.log("[SideBar] Hitokoto URL is not valid, using as text:", url);
-      setSideBarSubTitle(url);
+      const parsedSubTitle = parseTextWithUrls(url);
+      setSideBarSubTitle(parsedSubTitle);
     }
   };
 
@@ -333,16 +378,6 @@ export function SideBar(props: { className?: string }) {
     if (hitokotoUrl && isValidUrl(hitokotoUrl)) {
       console.log("[SideBar] Refreshing hitokoto from:", hitokotoUrl);
       fetchHitokoto(hitokotoUrl);
-    }
-  };
-
-  // 检查是否是有效的URL
-  const isValidUrl = (url: string) => {
-    try {
-      new URL(url);
-      return true;
-    } catch (e) {
-      return false;
     }
   };
 
